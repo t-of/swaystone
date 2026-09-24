@@ -4,6 +4,7 @@ import {
   MATERIALS, makeBody, pickBlock, clampX, standHeight, updateRecord, isOver, spawnYFor, cameraLift,
   viewScale, toU, heightText, shareText, readBest, writeBest, mergeBest,
 } from './logic.js';
+import { unlock, isOn, setOn, sfx } from './sound.js';
 
 const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
 
@@ -191,6 +192,7 @@ function start() {
   Composite.add(engine.world, Bodies.rectangle(WORLD_W / 2, BASE.h / 2, BASE.w, BASE.h,
     { isStatic: true, friction: 1, chamfer: { radius: 3 } }));
   Events.on(engine, 'afterUpdate', step);
+  Events.on(engine, 'collisionStart', landed);
   game = {
     held: null, blocks: [], count: 0, nextAt: 0, overAt: 0, over: false,
     stand: 0,                                  // 塔の今の上端の高さ
@@ -221,7 +223,21 @@ function spawn() {
 }
 
 function rotate(a) {
-  if (game?.held) Body.rotate(game.held, a);
+  if (!game?.held) return;
+  Body.rotate(game.held, a);
+  sfx.rotate();
+}
+
+// 落としたブロックが最初に何かに当たったら、材質の音を 1 回だけ鳴らす
+function landed(e) {
+  for (const { bodyA, bodyB } of e.pairs) {
+    for (const p of [bodyA, bodyB]) {
+      const b = p.parent;
+      if (!b.look || b.look.landed) continue;
+      b.look.landed = true;
+      sfx.land(b.look.material, b.speed / 10);
+    }
+  }
 }
 
 function drop() {
@@ -234,6 +250,7 @@ function drop() {
   game.count++;
   game.held = null;
   game.nextAt = now() + NEXT_DELAY;
+  sfx.drop();
   hud();
 }
 
@@ -270,6 +287,7 @@ function step() {
     game.over = true;
     game.held = null;
     game.overAt = t + OVER_DELAY;
+    sfx.over();
   }
   if (game.over && screen === 'play' && t >= game.overAt) finish();
 }
@@ -287,6 +305,7 @@ function finish() {
   $('rHeight').textContent = heightText(game.height);
   const news = [r.newCount && '個数', r.newHeight && '高さ'].filter(Boolean);
   $('rNew').hidden = !news.length;
+  if (news.length) sfx.best();
   $('rNew').textContent = `ベスト更新（${news.join('・')}）`;
   $('rBest').textContent = `ベスト ${best.count} 個 ・ ${heightText(best.height)}`;
   show('over');
@@ -366,6 +385,19 @@ document.addEventListener('visibilitychange', () => {
   for (const k in keys) keys[k] = false;
   hold = null;
 });
+
+// 最初の音は触ったときに鳴らせるよう、どこを触っても音の準備をする
+addEventListener('pointerdown', unlock, true);
+addEventListener('keydown', unlock, true);
+for (const id of ['start', 'again', 'toTitle', 'shareResult']) $(id).addEventListener('click', () => sfx.tap());
+
+// 音のオン・オフ
+function syncSound() {
+  $('sound').setAttribute('aria-pressed', isOn());
+  $('sound').textContent = isOn() ? '音 オン' : '音 オフ';
+}
+$('sound').addEventListener('click', () => { setOn(!isOn()); syncSound(); sfx.tap(); });
+syncSound();
 
 $('start').addEventListener('click', start);
 $('again').addEventListener('click', start);

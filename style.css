@@ -93,7 +93,7 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .title__best { color: var(--muted); font-size: 14px; }
 .title__best span { color: var(--fg); font-weight: 700; }
 .title .big { width: min(280px, 100%); margin-top: 4px; }
-.title__sub { display: flex; gap: 10px; }
+.title__sub { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .credit { font-size: 12px; color: var(--muted); }
 .credit a { color: inherit; display: inline-block; min-width: 44px; min-height: 44px; line-height: 44px; padding: 0 6px; }
 

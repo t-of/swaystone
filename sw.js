@@ -8,7 +8,7 @@
 // keys.filter(k => k !== CACHE) のように書くと、ほかのアプリのキャッシュまで消してしまう。
 
 const PREFIX = 'yurazumi-';
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `${PREFIX}${VERSION}`;
 const FONT_CACHE = `${PREFIX}fonts`;
 
@@ -18,6 +18,7 @@ const SHELL = [
   './style.css',
   './main.js',
   './logic.js',
+  './sound.js',
   './vendor/matter.min.js',
   './manifest.webmanifest',
   './webapp-kit/webapp-kit.css',
