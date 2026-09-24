@@ -1,1 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#1b2230"/><text x="256" y="256" dy=".35em" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="280" fill="#eceef3">ゆ</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3650"/><stop offset=".55" stop-color="#1b2230"/><stop offset="1" stop-color="#141a25"/></linearGradient>
+<linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6b06f"/><stop offset="1" stop-color="#c98a4b"/></linearGradient>
+<linearGradient id="stone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b3bac3"/><stop offset="1" stop-color="#858d98"/></linearGradient>
+<linearGradient id="ice" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f9ff" stop-opacity=".95"/><stop offset="1" stop-color="#8fd3ef" stop-opacity=".78"/></linearGradient>
+<linearGradient id="rock" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6e655b"/><stop offset="1" stop-color="#3f3a35"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="url(#sky)"/>
+<g transform="translate(0,-22)">
+  <!-- 土台の岩 -->
+  <path d="M104 402 Q106 394 118 393 L394 395 Q408 396 408 404 L400 418 Q380 436 330 446 L250 454 Q180 450 140 436 Q110 424 104 402Z" fill="url(#rock)" stroke="#2c2824" stroke-width="4"/>
+  <path d="M120 400 L392 402" stroke="#8a7f71" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+  <!-- まるいし（石） -->
+  <g transform="translate(194,358) rotate(-6)">
+    <ellipse rx="68" ry="38" fill="url(#stone)" stroke="#4f5660" stroke-width="5"/>
+    <g fill="#6f7782"><circle cx="-30" cy="8" r="3.5"/><circle cx="8" cy="16" r="3"/><circle cx="30" cy="-4" r="3.5"/><circle cx="-8" cy="-10" r="2.5"/><circle cx="44" cy="12" r="2.5"/></g>
+    <path d="M-44 -18 Q-20 -30 12 -30" fill="none" stroke="#dfe4ea" stroke-width="5" stroke-linecap="round" opacity=".8"/>
+  </g>
+  <!-- くさび（木） -->
+  <g>
+    <path d="M282 396 L390 396 L356 330 L316 330Z" fill="url(#wood)" stroke="#7e5128" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M304 380 Q336 372 372 382 M316 356 Q336 350 360 358" fill="none" stroke="#a86e37" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+  <!-- いた（木） + その上の段 -->
+  <g transform="translate(262,306.5) rotate(3.3)">
+    <rect x="-140" y="-19" width="280" height="38" rx="9" fill="url(#wood)" stroke="#7e5128" stroke-width="5"/>
+    <path d="M-120 -4 Q-60 -10 0 -3 T110 -5 M-96 8 Q-30 3 40 9 T122 7" fill="none" stroke="#a86e37" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- ろっかく（氷） -->
+    <g transform="translate(18,-71.0) rotate(0)">
+      <polygon points="60.0,0.0 30.0,52.0 -30.0,52.0 -60.0,0.0 -30.0,-52.0 30.0,-52.0" fill="url(#ice)" stroke="#e8f8ff" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M-34 -30 L-14 -30 M-40 -18 L-30 -18" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity=".9"/>
+      <path d="M24 38 L40 12" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity=".55"/>
+      <!-- はんげつ（石） 傾いてゆれている -->
+      <g transform="translate(-6,-52.0) rotate(-13)">
+        <path d="M-46 0 A46 46 0 0 1 46 0 Z" fill="url(#wood)" stroke="#7e5128" stroke-width="5" stroke-linejoin="round"/>
+        <path d="M-26 -12 Q0 -20 26 -12" fill="none" stroke="#a86e37" stroke-width="3.5" stroke-linecap="round"/>
+      </g>
+    </g>
+  </g>
+  <!-- ゆれの線 -->
+  <g fill="none" stroke="#ffd35c" stroke-width="7" stroke-linecap="round" opacity=".9">
+    <path d="M212 137 Q198 157 206 177"/>
+    <path d="M346 117 Q360 137 354 157"/>
+  </g>
+</g></svg>
