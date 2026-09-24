@@ -67,34 +67,81 @@ test('左右は端から 20 の内側', () => {
   assert.equal(L.clampX(123), 123);
 });
 
-test('高さは止まっているものだけ数える', () => {
+test('塔の今の高さ（落ちている途中のものは数えない）', () => {
   const now = 5000;
-  assert.equal(L.towerHeight([], now), 0);
-  assert.equal(L.towerHeight([
-    { droppedAt: 1000, speed: 0.1, top: -44 },   // 数える
-    { droppedAt: 4500, speed: 0, top: -300 },    // 落としたばかり
-    { droppedAt: 1000, speed: 2, top: -200 },    // 動いている
+  assert.equal(L.standHeight([], now), 0);
+  assert.equal(L.standHeight([
+    { droppedAt: 1000, top: -44 },
+    { droppedAt: 4800, top: -300 },   // 落としたばかり
   ], now), 44);
-  assert.equal(L.towerHeight([{ droppedAt: 0, speed: 0, top: 30 }], now), 0, '土台より下は 0');
+  assert.equal(L.standHeight([{ droppedAt: 0, top: 30 }], now), 0, '土台より下は 0');
   assert.equal(L.toU(44), 2);
   assert.equal(L.heightText(34.2), '3.4 m');
   assert.equal(L.heightText(0), '0.0 m');
   assert.equal(L.shareText(23, 34.2), 'ゆらづみで 23 個つんだ（高さ 3.4 m）');
 });
 
-test('中心が土台の上面より 80 下で終わり', () => {
-  assert.equal(L.isOver([]), false);
-  assert.equal(L.isOver([-20, 79.9]), false);
-  assert.equal(L.isOver([-20, 80.1]), true);
-  assert.equal(L.isOver([5000]), true, '速く落ちてもすり抜けない');
+test('高さの記録は、全部が止まって一定時間たったときだけ', () => {
+  const still = (top) => ({ droppedAt: 0, speed: 0, spin: 0, top, y: top / 2 });
+  let rec = { stillSince: null, height: 0 };
+  // 止まっていても、STILL_TIME たつまでは記録しない
+  rec = L.updateRecord(rec, [still(-40)], 1000);
+  assert.equal(rec.height, 0);
+  rec = L.updateRecord(rec, [still(-40)], 1000 + L.STILL_TIME);
+  assert.equal(rec.height, 40);
+
+  // 板を立てて落とす: 一瞬止まって見えても、すぐ動けば記録しない
+  const t0 = 3000;
+  const upright = { droppedAt: t0 - L.SETTLE_TIME, speed: 0.1, spin: 0.002, top: -140, y: -70 };
+  rec = L.updateRecord(rec, [still(-40), upright], t0);
+  assert.equal(rec.height, 40);
+  rec = L.updateRecord(rec, [still(-40), { ...upright, speed: 3, spin: 0.08, top: -120 }], t0 + 200);   // 倒れはじめる
+  assert.equal(rec.stillSince, null);
+  rec = L.updateRecord(rec, [still(-40), { ...upright, top: -60 }], t0 + 400);   // 倒れて止まった
+  rec = L.updateRecord(rec, [still(-40), { ...upright, top: -60 }], t0 + 400 + L.STILL_TIME);
+  assert.equal(rec.height, 60, '倒れたあとの高さ');
+
+  // ゆっくり回り続けているもの（速さは小さい）は止まっていない
+  assert.equal(L.allStill([{ ...still(-40), spin: 0.05 }], 9999), false);
+  // 落として SETTLE_TIME たっていないものがあれば止まっていない
+  assert.equal(L.allStill([{ ...still(-40), droppedAt: 9500 }], 9999), false);
+  assert.equal(L.allStill([], 9999), false);
+  // 崩れて低くなっても、記録は下がらない
+  rec = L.updateRecord(rec, [still(-10)], 20000);
+  rec = L.updateRecord(rec, [still(-10)], 20000 + L.STILL_TIME);
+  assert.equal(rec.height, 60);
 });
 
-test('画面の追いかけは上にだけ', () => {
-  const viewH = 600;  // 出てくる位置 = 90 - 600 + 40 = -470、その 180 下 = -290
-  assert.equal(L.followLift(0, viewH, 0), 0);
-  assert.equal(L.followLift(0, viewH, -289), 0);
-  assert.equal(L.followLift(0, viewH, -300), 10);
-  assert.equal(L.followLift(50, viewH, -300), 50, '下には戻さない');
+test('中心が土台の上面より 80 下で終わり', () => {
+  const at = (y) => ({ y });
+  assert.equal(L.isOver([]), false);
+  assert.equal(L.isOver([at(-20), at(79.9)]), false);
+  assert.equal(L.isOver([at(-20), at(80.1)]), true);
+  assert.equal(L.isOver([at(5000)]), true, '速く落ちてもすり抜けない');
+});
+
+test('出てくる位置は塔の上端の少し上、画面は今の高さに合わせて上がり下がりする', () => {
+  assert.equal(L.spawnYFor(0), -L.SPAWN_GAP);
+  assert.equal(L.spawnYFor(200), -200 - L.SPAWN_GAP);
+  const viewH = 600;   // 上げていない画面の上端 = 90 - 600 = -510
+  assert.equal(L.cameraLift(viewH, 0), 0);
+  const need = 510 - L.SPAWN_GAP - L.SPAWN_FROM_TOP;   // この高さを超えたら上げはじめる
+  assert.equal(L.cameraLift(viewH, need), 0);
+  assert.equal(L.cameraLift(viewH, need + 30), 30);
+  assert.equal(L.cameraLift(viewH, 10), 0, '崩れて低くなれば戻る');
+  // 出てくる位置はいつも画面の中
+  for (const h of [0, 100, 400, 2000]) {
+    const camTop = L.BASE_FROM_BOTTOM - viewH - L.cameraLift(viewH, h);
+    assert.ok(L.spawnYFor(h) - camTop >= L.SPAWN_FROM_TOP - 1e-9);
+  }
+});
+
+test('縮尺: 横画面でも見える世界の高さは MIN_VIEW_H 以上', () => {
+  assert.equal(L.viewScale(390, 698), 390 / 360, '縦画面は幅に合わせる');
+  const s = L.viewScale(844, 244);
+  assert.ok(244 / s >= L.MIN_VIEW_H - 1e-9);
+  // 土台と、何も積んでいないときの出てくる位置が画面に入る
+  assert.ok(L.BASE_FROM_BOTTOM + L.SPAWN_GAP + L.SPAWN_FROM_TOP <= L.MIN_VIEW_H);
 });
 
 test('自己ベストの読み書き', () => {
@@ -125,7 +172,24 @@ test('物理で実際に積める（木のいたを土台に落とすと止ま�
   for (let i = 0; i < 180; i++) Matter.Engine.update(engine, 1000 / 60);
   assert.ok(b.speed < L.SETTLE_SPEED, '止まった');
   assert.ok(Math.abs(b.bounds.max.y) < 2, `土台の上にのった（${b.bounds.max.y.toFixed(1)}）`);
-  assert.equal(L.isOver([b.position.y]), false);
+  assert.equal(L.isOver([{ y: b.position.y }]), false);
+});
+
+test('物理で: 板を立てて落としても、倒れる前の高さは記録に入らない', () => {
+  const engine = Matter.Engine.create({ positionIterations: 10, velocityIterations: 10 });
+  const base = Matter.Bodies.rectangle(L.WORLD_W / 2, L.BASE.h / 2, L.BASE.w, L.BASE.h, { isStatic: true, friction: 1 });
+  const b = L.makeBody(Matter, 'ita', 'wood', L.WORLD_W / 2 + 3, -80);
+  Matter.Body.rotate(b, Math.PI / 2 - 0.2);   // ほぼ立てる（高さ 4.5u = 99）。少し傾けてあるので倒れる
+  Matter.Composite.add(engine.world, [base, b]);
+  let rec = { stillSince: null, height: 0 }, maxTop = 0;
+  for (let i = 0; i < 60 * 8; i++) {
+    Matter.Engine.update(engine, 1000 / 60);
+    const t = engine.timing.timestamp;
+    rec = L.updateRecord(rec, [{ droppedAt: 0, speed: b.speed, spin: Math.abs(b.angularVelocity), top: b.bounds.min.y, y: b.position.y }], t);
+    if (t > 300) maxTop = Math.max(maxTop, -b.bounds.min.y);
+  }
+  assert.ok(maxTop > 80, `立った姿勢を通った（${maxTop.toFixed(0)}）`);
+  assert.ok(rec.height > 0 && rec.height < 40, `記録は倒れたあとの高さ（${rec.height.toFixed(1)}）`);
 });
 
 console.log(`\n${n} 件すべて合格`);

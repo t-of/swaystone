@@ -7,14 +7,16 @@ export const U = 22;                  // 長さの単位。表示では 1u = 10c
 export const WORLD_W = 360;
 export const BASE = { w: 180, h: 16 };  // 土台。上面を y = 0 とする（下が +）
 export const BASE_FROM_BOTTOM = 90;   // 初めの画面で、土台の上面は画面の下から 90
-export const SPAWN_FROM_TOP = 40;     // 出てくるブロックは画面の上から 40
+export const SPAWN_FROM_TOP = 40;     // 出てくるブロックは、画面の上から 40 より内側に
 export const EDGE = 20;               // ブロックの左右は端から 20 の内側まで
 export const FALL_LIMIT = 80;         // 中心が土台の上面より 80 下に来たら終わり
-export const FOLLOW_GAP = 180;        // 塔のいちばん上が出てくる位置の 180 下より上に来たら画面を上げる
+export const SPAWN_GAP = 110;         // 出てくるブロックの中心は、塔の上端から 110 上（立てた板でもぶつからない）
 export const NEXT_DELAY = 650;        // ms。落としてから次が出るまで
 export const OVER_DELAY = 400;        // ms。落ちてから結果を出すまで
 export const SETTLE_TIME = 800;       // ms。高さに数えるのは落として 0.8 秒たち、
-export const SETTLE_SPEED = 0.3;      //     速さが 0.3 未満のものだけ
+export const SETTLE_SPEED = 0.3;      //     速さが 0.3 未満、回る速さが SETTLE_SPIN 未満のものだけ
+export const SETTLE_SPIN = 0.01;
+export const STILL_TIME = 500;        // ms。全部がこれだけ止まっていたら高さを記録する
 export const KEY_MOVE = 5;            // ← → で 1 フレームに動く量
 export const ROT_STEP = Math.PI / 12; // ↺ ↻ を 1 回押すと 15°
 export const ROT_SPEED = (120 * Math.PI) / 180;  // 押し続けると 1 秒に 120°
@@ -86,23 +88,46 @@ export function pickBlock(rand = Math.random) {
 export const clampX = (x) => Math.min(WORLD_W - EDGE, Math.max(EDGE, x));
 
 // ---- 高さ・終わり・画面の追いかけ ----
+// blocks: [{ droppedAt, speed, spin, top, y }]
+//   top = 体のいちばん上の y、y = 中心の y、speed = 速さ、spin = 回る速さ（土台の上面が y = 0、上が −）
 
-// blocks: [{ droppedAt, speed, top }]（top は体のいちばん上の y）。返すのは世界の長さ
-export function towerHeight(blocks, now) {
+// 塔の今の上端の高さ（落として NEXT_DELAY たったものだけ。落ちている途中のものは数えない）
+export function standHeight(blocks, now) {
   let h = 0;
-  for (const b of blocks) {
-    if (now - b.droppedAt >= SETTLE_TIME && b.speed < SETTLE_SPEED) h = Math.max(h, -b.top);
-  }
+  for (const b of blocks) if (now - b.droppedAt >= NEXT_DELAY) h = Math.max(h, -b.top);
   return h;
 }
 
-// centers: 落としたブロックの中心の y
-export const isOver = (centers) => centers.some((y) => y > FALL_LIMIT);
+// 全部が止まっているか
+export const allStill = (blocks, now) => blocks.length > 0 && blocks.every((b) =>
+  now - b.droppedAt >= SETTLE_TIME && b.speed < SETTLE_SPEED && b.spin < SETTLE_SPIN);
 
-// lift = 画面を上げた量。塔のいちばん上（y）が「出てくる位置 + 180」より上に来たら上げる。下には戻さない
-export function followLift(lift, viewH, towerTop) {
-  return Math.max(lift, BASE_FROM_BOTTOM + SPAWN_FROM_TOP + FOLLOW_GAP - viewH - towerTop);
+// 高さの記録。全部が止まったまま STILL_TIME たったときの上端だけを数える
+// （崩れる途中の一瞬の姿勢や、立てて落とした板が倒れる前の高さは記録しない）
+// rec = { stillSince, height }。height は世界の長さ
+export function updateRecord(rec, blocks, now) {
+  if (!allStill(blocks, now)) return { stillSince: null, height: rec.height };
+  // 止まりはじめたのは、いちばん新しいブロックが落ち着いた時より前にはならない
+  const stillSince = Math.max(rec.stillSince ?? now, ...blocks.map((b) => b.droppedAt + SETTLE_TIME));
+  if (now - stillSince < STILL_TIME) return { stillSince, height: rec.height };
+  return { stillSince, height: Math.max(rec.height, ...blocks.map((b) => -b.top)) };
 }
+
+export const isOver = (blocks) => blocks.some((b) => b.y > FALL_LIMIT);
+
+// 出てくる位置は、今の塔の上端から SPAWN_GAP 上（落ちる距離を短くして、ぶつかる勢いを弱める）
+export const spawnYFor = (height) => -height - SPAWN_GAP;
+
+// 画面を上げる量。出てくる位置が画面の上から SPAWN_FROM_TOP より内側に入るように。
+// 今の高さから決めるので、塔が崩れて低くなれば下がる
+export function cameraLift(viewH, height) {
+  const camTop0 = BASE_FROM_BOTTOM - viewH;   // 上げていないときの画面の上端
+  return Math.max(0, camTop0 - (spawnYFor(height) - SPAWN_FROM_TOP));
+}
+
+// 見える世界の高さがこれより小さくならないように縮尺を決める（横画面でも土台と出てくる位置が入る）
+export const MIN_VIEW_H = 440;
+export const viewScale = (cssW, cssH) => Math.min(cssW / WORLD_W, cssH / MIN_VIEW_H);
 
 export const toU = (len) => Math.round((len / U) * 10) / 10;
 export const heightText = (u) => `${(u / 10).toFixed(1)} m`;

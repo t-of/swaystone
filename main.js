@@ -1,8 +1,8 @@
 // ゆらづみ本体。決まりごと（数値・形・記録）は logic.js、ここは画面・操作・物理のつなぎ。
 import {
-  WORLD_W, BASE, BASE_FROM_BOTTOM, SPAWN_FROM_TOP, NEXT_DELAY, OVER_DELAY, KEY_MOVE,
-  ROT_STEP, ROT_SPEED, ROT_HOLD, MATERIALS, makeBody, pickBlock, clampX, towerHeight, isOver,
-  followLift, toU, heightText, shareText, readBest, writeBest, mergeBest,
+  WORLD_W, BASE, BASE_FROM_BOTTOM, NEXT_DELAY, OVER_DELAY, KEY_MOVE, ROT_STEP, ROT_SPEED, ROT_HOLD,
+  MATERIALS, makeBody, pickBlock, clampX, standHeight, updateRecord, isOver, spawnYFor, cameraLift,
+  viewScale, toU, heightText, shareText, readBest, writeBest, mergeBest,
 } from './logic.js';
 
 const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
@@ -90,7 +90,8 @@ function drawBlock(c, body) {
   c.fill();
   c.save();
   c.clip();
-  if (body.look.material === 'ice') {   // ふちの内側に光
+  // ふちの内側に光。部品を組み合わせた形は、部品の境目まで光ってしまうので外側のふちだけにする
+  if (body.look.material === 'ice' && parts.length === 1) {
     c.lineWidth = 3;
     c.strokeStyle = 'rgba(255, 255, 255, 0.7)';
     c.stroke();
@@ -145,7 +146,7 @@ function drawSample() {
 // ---- 遊ぶ ----
 const canvas = $('stage');
 const ctx = canvas.getContext('2d');
-const view = { h: 600, scale: 1, dpr: 1 };   // h は世界の長さ（幅はいつも WORLD_W）
+const view = { h: 600, ox: 0, scale: 1, dpr: 1 };   // h は見える世界の高さ、ox は世界を左右中央に置くためのずれ
 let sky = null;
 let engine = null, runner = null, game = null;
 let screen = 'title';
@@ -159,8 +160,9 @@ function resize() {
   view.dpr = devicePixelRatio || 1;
   canvas.width = Math.round(r.width * view.dpr);
   canvas.height = Math.round(r.height * view.dpr);
-  view.scale = r.width / WORLD_W;
+  view.scale = viewScale(r.width, r.height);   // ふつうは幅 360 に合わせる。横長の画面では高さに合わせる
   view.h = r.height / view.scale;
+  view.ox = (r.width / view.scale - WORLD_W) / 2;
   sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
   sky.addColorStop(0, '#1b2230');
   sky.addColorStop(0.55, '#26324a');
@@ -171,7 +173,6 @@ new ResizeObserver(resize).observe(canvas);
 
 const now = () => (engine ? engine.timing.timestamp : 0);
 const camTop = () => BASE_FROM_BOTTOM - view.h - game.lift;   // 画面の上の端の y
-const spawnY = () => camTop() + SPAWN_FROM_TOP;
 
 // 画面の切り替え（隠すのは hidden = display: none）
 function show(s) {
@@ -179,6 +180,7 @@ function show(s) {
   $('title').hidden = s !== 'title';
   $('play').hidden = s === 'title';
   $('result').hidden = s !== 'over';
+  $('play').classList.toggle('is-over', s === 'over');
   if (s === 'title') $('titleBest').textContent = `${best.count} 個 ・ ${heightText(best.height)}`;
 }
 
@@ -189,7 +191,13 @@ function start() {
   Composite.add(engine.world, Bodies.rectangle(WORLD_W / 2, BASE.h / 2, BASE.w, BASE.h,
     { isStatic: true, friction: 1, chamfer: { radius: 3 } }));
   Events.on(engine, 'afterUpdate', step);
-  game = { held: null, blocks: [], count: 0, height: 0, nextAt: 0, overAt: 0, lift: 0, liftTarget: 0, over: false };
+  game = {
+    held: null, blocks: [], count: 0, nextAt: 0, overAt: 0, over: false,
+    stand: 0,                                  // 塔の今の上端の高さ
+    rec: { stillSince: null, height: 0 },      // 高さの記録（全部が止まったときだけ更新）
+    height: 0,                                 // 表示と保存に使う高さ（u）
+    lift: 0, cardBottom: 0,
+  };
   show('play');
   resize();
   hud();
@@ -206,7 +214,7 @@ function toTitle() {
 function spawn() {
   const { shape, material } = pickBlock();
   game.held = newBlock(shape, material, WORLD_W / 2, 0);
-  Body.setPosition(game.held, { x: WORLD_W / 2, y: spawnY() });
+  Body.setPosition(game.held, { x: WORLD_W / 2, y: spawnYFor(game.stand) });
   const m = MATERIALS[material];
   $('mat').textContent = `${m.name}・${m.note}`;
   $('mat').dataset.material = material;
@@ -241,13 +249,24 @@ function step() {
     if (da) Body.rotate(b, da);
   } else if (!game.over && t >= game.nextAt) spawn();
 
-  const h = towerHeight(game.blocks.map(({ body, droppedAt }) => ({ droppedAt, speed: body.speed, top: body.bounds.min.y })), t);
-  if (toU(h) > game.height) { game.height = toU(h); hud(); }
-  game.liftTarget = followLift(game.liftTarget, view.h, -h);
-  game.lift += (game.liftTarget - game.lift) * 0.06;
-  if (game.held) Body.setPosition(game.held, { x: game.held.position.x, y: spawnY() });
+  const snap = game.blocks.map(({ body, droppedAt }) => ({
+    droppedAt, speed: body.speed, spin: Math.abs(body.angularVelocity), top: body.bounds.min.y, y: body.position.y,
+  }));
+  game.stand = standHeight(snap, t);
+  game.rec = updateRecord(game.rec, snap, t);
+  if (toU(game.rec.height) !== game.height) { game.height = toU(game.rec.height); hud(); }
 
-  if (!game.over && isOver(game.blocks.map(({ body }) => body.position.y))) {
+  // 画面は今の高さに合わせて上下する。結果のカードが塔に重なるときは、塔の上端がカードの下に来るまで上げる
+  let lift = cameraLift(view.h, game.stand);
+  if (game.cardBottom) lift = Math.max(lift, BASE_FROM_BOTTOM - view.h + game.stand + game.cardBottom);
+  game.lift += (lift - game.lift) * 0.06;
+  // 塔が伸びて近づいたら、持っているブロックも上げる（下げはしない）
+  if (game.held) {
+    const y = spawnYFor(game.stand);
+    if (y < game.held.position.y) Body.setPosition(game.held, { x: game.held.position.x, y });
+  }
+
+  if (!game.over && isOver(snap)) {
     game.over = true;
     game.held = null;
     game.overAt = t + OVER_DELAY;
@@ -271,6 +290,11 @@ function finish() {
   $('rNew').textContent = `ベスト更新（${news.join('・')}）`;
   $('rBest').textContent = `ベスト ${best.count} 個 ・ ${heightText(best.height)}`;
   show('over');
+  // カードが世界の列（幅 360）と左右で重なっていれば、カードの下の端（世界の長さ）を覚えておく
+  const cr = document.querySelector('.result__card').getBoundingClientRect();
+  const vr = canvas.getBoundingClientRect();
+  const colL = vr.left + view.ox * view.scale, colR = colL + WORLD_W * view.scale;
+  game.cardBottom = cr.left < colR && cr.right > colL ? (cr.bottom - vr.top) / view.scale + 16 : 0;
 }
 
 function render() {
@@ -281,7 +305,7 @@ function render() {
   c.fillStyle = sky;
   c.fillRect(0, 0, canvas.width, canvas.height);
   const k = view.scale * view.dpr;
-  c.setTransform(k, 0, 0, k, 0, -camTop() * k);
+  c.setTransform(k, 0, 0, k, view.ox * k, -camTop() * k);
   drawBase(c);
   const b = game.held;
   if (b) {   // 落ちる位置の目安は細い縦の点線だけ。落ちた先の形（影）は描かない

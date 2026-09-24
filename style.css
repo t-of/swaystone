@@ -95,7 +95,7 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .title .big { width: min(280px, 100%); margin-top: 4px; }
 .title__sub { display: flex; gap: 10px; }
 .credit { font-size: 12px; color: var(--muted); }
-.credit a { color: inherit; }
+.credit a { color: inherit; display: inline-block; min-width: 44px; min-height: 44px; line-height: 44px; padding: 0 6px; }
 
 /* ---- 遊ぶ ---- */
 .play {
@@ -152,6 +152,7 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
   line-height: 1;
 }
 .rot:active { background: rgba(255, 255, 255, 0.18); }
+.is-over .controls { visibility: hidden; }   /* 結果のあいだは押せないので見せない（カードの後ろに透けないように） */
 
 /* ---- 結果（ステージの上に重ね、後ろの塔が見える） ---- */
 .result {
@@ -168,7 +169,7 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
   padding: 22px 20px 18px;
   border: 1px solid var(--line);
   border-radius: 22px;
-  background: rgba(27, 34, 48, 0.86);
+  background: rgba(27, 34, 48, 0.95);
   text-align: center;
   display: grid;
   gap: 8px;
@@ -184,6 +185,45 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .result__card .big { margin-top: 6px; }
 .result__row { display: flex; gap: 10px; justify-content: center; }
 @keyframes rise { from { transform: translateY(16px); opacity: 0; } }
+
+/* ---- 低い画面（360×640 など）: タイトルと結果をつめる ---- */
+@media (max-height: 720px) {
+  .title { gap: 8px; }
+  .title__name { font-size: 36px; }
+  .title__sample { width: 170px; height: 156px; }
+  .title .big, .result__card .big { min-height: 50px; font-size: 18px; }
+  .result { padding-top: calc(max(8px, env(safe-area-inset-top)) + 56px); }
+  .result__card { padding: 14px 16px 12px; gap: 4px; }
+  .result__title { font-size: 20px; }
+  .result__score span:first-child b { font-size: 40px; }
+}
+
+/* ---- 横画面のスマホ: タイトルは 2 列、遊ぶ画面は全幅で、結果は右に置く ---- */
+@media (orientation: landscape) and (max-height: 560px) {
+  .title {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: center;
+    align-content: center;
+    justify-items: center;
+    column-gap: 32px;
+    row-gap: 2px;
+  }
+  .title > * { grid-column: 2; }
+  .title .title__sample { grid-column: 1; grid-row: 1 / span 8; align-self: center; width: 250px; height: 230px; }
+  .title__name { font-size: 32px; }
+  .title__tag { margin-top: 0; }
+  .play { max-width: none; }
+  .hud__count b { font-size: 32px; }
+  .controls { padding-top: 6px; }
+  .rot, .controls .big { height: 50px; min-height: 50px; }
+  .result {
+    align-items: center;
+    justify-content: flex-end;
+    padding: max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) 16px;
+  }
+  .result__card { width: 300px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .result__card { animation: none; }
