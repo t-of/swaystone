@@ -1,5 +1,7 @@
-// 効果音。音声ファイルは使わず Web Audio で作る。設定は 'yurazumi.sound' に覚える。
-const KEY = 'yurazumi.sound';
+// 効果音。音声ファイルは使わず Web Audio で作る。設定は 'swaystone.sound' に覚える。
+import { migrateKey } from './logic.js';
+const KEY = 'swaystone.sound';
+migrateKey(null, 'yurazumi.sound', KEY);  // 旧名「ゆらづみ」からの引き継ぎ
 
 // iPhone のマナーモードでも鳴らす（Safari 16.4 以降）。
 // 'playback' にすると音楽アプリの曲が止まるので、アプリの音がオンのときだけにする。

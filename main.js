@@ -1,4 +1,4 @@
-// ゆらづみ本体。決まりごと（数値・形・記録）は logic.js、ここは画面・操作・物理のつなぎ。
+// SWAYSTONE 本体。決まりごと（数値・形・記録）は logic.js、ここは画面・操作・物理のつなぎ。
 import {
   WORLD_W, BASE, BASE_FROM_BOTTOM, NEXT_DELAY, OVER_DELAY, KEY_MOVE, ROT_STEP, ROT_SPEED, ROT_HOLD,
   MATERIALS, makeBody, pickBlock, clampX, standHeight, updateRecord, isOver, spawnYFor, cameraLift,
@@ -8,7 +8,7 @@ import { unlock, isOn, setOn, sfx } from './sound.js';
 
 const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
 
-WebAppKit.init({ title: 'ゆらづみ', text: '木・石・氷のブロックを落として、土台の上に高く積み上げる。材質で重さとすべりやすさが違い、物理でゆれて崩れる。' });
+WebAppKit.init({ title: 'SWAYSTONE', text: '木・石・氷のブロックを落として、土台の上に高く積み上げる。材質で重さとすべりやすさが違い、物理でゆれて崩れる。' });
 
 // https と localhost（開発・audit）で登録する。それ以外の http では serviceWorker がない
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');

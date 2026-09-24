@@ -1,10 +1,12 @@
-# ゆらづみ — 木と石と氷を積むタワー
+# SWAYSTONE — 木と石と氷を積むタワー
+
+（読み: スウェイストーン。旧名 ゆらづみ）
 
 木・石・氷のブロックを落として、土台の上に高く積み上げる。材質で重さとすべりやすさが違い、物理でゆれて崩れる。
 
 ## 🔗 リンク
 
-- 遊ぶ: https://t-of.github.io/yurazumi/
+- 遊ぶ: https://t-of.github.io/swaystone/
 - 制作: [T.OF...](https://t-of.github.io/)
 
 ## 遊び方
@@ -44,7 +46,8 @@ node test.mjs                 # 形・高さ・終わりの判定・記録のテ
 | `vendor/matter.min.js` | 物理エンジン [Matter.js](https://brm.io/matter-js/) 0.20.0（npm のビルド済みファイル） |
 
 - 材質の重さ・すべりやすさは `logic.js` の `MATERIALS` にまとめてある。
-- 記録は端末内の `localStorage` の `yurazumi.best`（`{ v: 1, count, height }`、height は 1u = 22 の単位）。
+- 記録は端末内の `localStorage` の `swaystone.best`（`{ v: 1, count, height }`、height は 1u = 22 の単位）。
+  旧名「ゆらづみ」時代の `yurazumi.best` / `yurazumi.sound` があれば、初回起動時に読んで新しいキーに引き継ぐ（`logic.js` の `migrateKey`）。
 
 ## ライセンス表記
 

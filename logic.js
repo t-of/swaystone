@@ -1,4 +1,4 @@
-// ゆらづみの決まりごと。画面（DOM）に触らない部分をここに集める。
+// SWAYSTONE の決まりごと。画面（DOM）に触らない部分をここに集める。
 // main.js（ブラウザ）と test.mjs（node）の両方から読む。
 // 物理の体を作る makeBody だけは Matter を引数でもらう（node のテストでも同じ形を作れるように）。
 
@@ -131,13 +131,26 @@ export const viewScale = (cssW, cssH) => Math.min(cssW / WORLD_W, cssH / MIN_VIE
 
 export const toU = (len) => Math.round((len / U) * 10) / 10;
 export const heightText = (u) => `${(u / 10).toFixed(1)} m`;
-export const shareText = (count, u) => `ゆらづみで ${count} 個つんだ（高さ ${heightText(u)}）`;
+export const shareText = (count, u) => `SWAYSTONE で ${count} 個つんだ（高さ ${heightText(u)}）`;
 
-// ---- 自己ベスト（localStorage はほかのアプリと共有なので、キーは 'yurazumi.' で始める） ----
-export const BEST_KEY = 'yurazumi.best';
+// ---- 自己ベスト（localStorage はほかのアプリと共有なので、キーは 'swaystone.' で始める） ----
+export const BEST_KEY = 'swaystone.best';
+// 旧名「ゆらづみ」からの引き継ぎ。新しいキーがまだなく、古いキーがあれば読んで書き写す（古いキーは消さない）
+const OLD_BEST_KEY = 'yurazumi.best';
 const num = (v) => (Number.isFinite(v) && v > 0 ? v : 0);
 
+export function migrateKey(store, oldKey, newKey) {
+  try {
+    const s = store || localStorage;
+    if (s.getItem(newKey) == null) {
+      const old = s.getItem(oldKey);
+      if (old != null) s.setItem(newKey, old);
+    }
+  } catch { /* 読み書きできなくても遊べる */ }
+}
+
 export function readBest(store) {
+  migrateKey(store, OLD_BEST_KEY, BEST_KEY);
   try {
     const b = JSON.parse((store || localStorage).getItem(BEST_KEY));
     if (b && b.v === 1) return { v: 1, count: num(b.count), height: num(b.height) };

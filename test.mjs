@@ -78,7 +78,7 @@ test('塔の今の高さ（落ちている途中のものは数えない）', ()
   assert.equal(L.toU(44), 2);
   assert.equal(L.heightText(34.2), '3.4 m');
   assert.equal(L.heightText(0), '0.0 m');
-  assert.equal(L.shareText(23, 34.2), 'ゆらづみで 23 個つんだ（高さ 3.4 m）');
+  assert.equal(L.shareText(23, 34.2), 'SWAYSTONE で 23 個つんだ（高さ 3.4 m）');
 });
 
 test('高さの記録は、全部が止まって一定時間たったときだけ', () => {
@@ -147,9 +147,9 @@ test('縮尺: 横画面でも見える世界の高さは MIN_VIEW_H 以上', () 
 test('自己ベストの読み書き', () => {
   const mem = (init) => { const d = { ...init }; return { getItem: (k) => d[k] ?? null, setItem: (k, v) => { d[k] = v; }, d }; };
   assert.deepEqual(L.readBest(mem()), { v: 1, count: 0, height: 0 });
-  assert.deepEqual(L.readBest(mem({ 'yurazumi.best': '{壊れた' })), { v: 1, count: 0, height: 0 });
-  assert.deepEqual(L.readBest(mem({ 'yurazumi.best': '{"v":2,"count":9}' })), { v: 1, count: 0, height: 0 });
-  assert.deepEqual(L.readBest(mem({ 'yurazumi.best': '{"v":1,"count":"x","height":-3}' })), { v: 1, count: 0, height: 0 });
+  assert.deepEqual(L.readBest(mem({ 'swaystone.best': '{壊れた' })), { v: 1, count: 0, height: 0 });
+  assert.deepEqual(L.readBest(mem({ 'swaystone.best': '{"v":2,"count":9}' })), { v: 1, count: 0, height: 0 });
+  assert.deepEqual(L.readBest(mem({ 'swaystone.best': '{"v":1,"count":"x","height":-3}' })), { v: 1, count: 0, height: 0 });
   const throwing = { getItem() { throw new Error('private'); }, setItem() { throw new Error('full'); } };
   assert.deepEqual(L.readBest(throwing), { v: 1, count: 0, height: 0 });
   L.writeBest({ v: 1, count: 1, height: 1 }, throwing);  // 例外を外に出さない
@@ -158,10 +158,31 @@ test('自己ベストの読み書き', () => {
   const r = L.mergeBest(L.readBest(s), 23, 34.2);
   assert.equal(r.newCount && r.newHeight, true);
   L.writeBest(r.best, s);
-  assert.equal(Object.keys(s.d)[0], 'yurazumi.best');
+  assert.equal(Object.keys(s.d)[0], 'swaystone.best');
   assert.deepEqual(L.readBest(s), { v: 1, count: 23, height: 34.2 });
   const r2 = L.mergeBest(L.readBest(s), 10, 40);
   assert.deepEqual(r2, { best: { v: 1, count: 23, height: 40 }, newCount: false, newHeight: true });
+});
+
+test('旧名「ゆらづみ」の記録・設定を新しいキーに引き継ぐ（古いキーは残す・上書きしない）', () => {
+  const mem = (init) => { const d = { ...init }; return { getItem: (k) => d[k] ?? null, setItem: (k, v) => { d[k] = v; }, d }; };
+
+  // 古いキーだけある → 新しいキーへ書き写す。古いキーは消えない
+  const s1 = mem({ 'yurazumi.best': '{"v":1,"count":5,"height":12}' });
+  assert.deepEqual(L.readBest(s1), { v: 1, count: 5, height: 12 });
+  assert.equal(s1.d['swaystone.best'], '{"v":1,"count":5,"height":12}');
+  assert.equal(s1.d['yurazumi.best'], '{"v":1,"count":5,"height":12}');
+
+  // 両方あれば新しいキーを優先し、上書きしない
+  const s2 = mem({ 'yurazumi.best': '{"v":1,"count":5,"height":12}', 'swaystone.best': '{"v":1,"count":99,"height":99}' });
+  assert.deepEqual(L.readBest(s2), { v: 1, count: 99, height: 99 });
+
+  // migrateKey 単体（sound.js の設定引き継ぎと同じ形）
+  const s3 = mem({ 'yurazumi.sound': '0' });
+  L.migrateKey(s3, 'yurazumi.sound', 'swaystone.sound');
+  assert.equal(s3.d['swaystone.sound'], '0');
+  L.migrateKey(s3, 'yurazumi.sound', 'swaystone.sound');  // 2 回呼んでも壊れない
+  assert.equal(s3.d['swaystone.sound'], '0');
 });
 
 test('物理で実際に積める（木のいたを土台に落とすと止まる）', () => {
