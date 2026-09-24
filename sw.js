@@ -17,6 +17,8 @@ const SHELL = [
   './index.html',
   './style.css',
   './main.js',
+  './logic.js',
+  './vendor/matter.min.js',
   './manifest.webmanifest',
   './webapp-kit/webapp-kit.css',
   './webapp-kit/webapp-kit.js',

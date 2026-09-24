@@ -2,7 +2,12 @@
   --bg: #1b2230;
   --fg: #eceef3;
   --muted: #9aa0ab;
-  --accent: #ffd35c;
+  --accent: #f2b862;
+  --accent-fg: #2b1c08;
+  --line: rgba(255, 255, 255, 0.12);
+  --wak-accent: #f2b862;
+  --wak-accent-fg: #2b1c08;
+  --wak-bg: #1b2230;
 }
 
 * { box-sizing: border-box; }
@@ -15,41 +20,171 @@ body {
   color: var(--fg);
   font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
-button { font: inherit; color: inherit; }
+p, h1, h2, ol { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
 [hidden] { display: none !important; }
 
-/* 画面の端に置くものはセーフエリアの分だけ内側に。高さは 100vh ではなく 100dvh */
-.app {
+.pill {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 14px;
+}
+.big {
+  min-height: 60px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  box-shadow: 0 6px 0 #a8742c;
+}
+.big:active { transform: translateY(3px); box-shadow: 0 3px 0 #a8742c; }
+
+/* ---- タイトル（画面の端はセーフエリアの分だけ内側に。高さは 100dvh） ---- */
+.title {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
   padding:
-    max(12px, env(safe-area-inset-top))
-    max(12px, env(safe-area-inset-right))
-    max(12px, env(safe-area-inset-bottom))
-    max(12px, env(safe-area-inset-left));
+    max(20px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
 }
-.bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.bar__title { margin: 0; font-size: 18px; }
-.bar__actions { display: flex; gap: 8px; }
-.pill {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.stage {
-  flex: 1;
+.title__name { font-size: 46px; font-weight: 800; letter-spacing: 0.12em; }
+.title__tag { color: var(--muted); font-size: 15px; margin-top: -8px; }
+.title__sample { width: 250px; height: 230px; display: block; }
+.howto {
+  padding: 0;
+  list-style: none;
+  counter-reset: n;
   display: grid;
-  place-items: center;
-  touch-action: manipulation;   /* ダブルタップ拡大を止める */
-  user-select: none;
-  -webkit-user-select: none;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  max-width: 340px;
 }
-.credit { text-align: center; font-size: 12px; color: var(--muted); }
+.howto li { counter-increment: n; display: flex; gap: 10px; }
+.howto li::before {
+  content: counter(n);
+  flex: none;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(242, 184, 98, 0.18);
+  color: var(--accent);
+  font-size: 12px; font-weight: 700;
+  display: grid; place-items: center;
+  margin-top: 1px;
+}
+.title__best { color: var(--muted); font-size: 14px; }
+.title__best span { color: var(--fg); font-weight: 700; }
+.title .big { width: min(280px, 100%); margin-top: 4px; }
+.title__sub { display: flex; gap: 10px; }
+.credit { font-size: 12px; color: var(--muted); }
 .credit a { color: inherit; }
 
-/* 全画面のオーバーレイは opacity ではなく display: none で隠す */
+/* ---- 遊ぶ ---- */
+.play {
+  position: relative;
+  max-width: 480px;   /* PC の広い画面では縦長の列にする（世界の幅は 360 に固定なので、広げると縦が足りない） */
+  margin: 0 auto;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding:
+    max(10px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    6px
+    max(18px, env(safe-area-inset-left));
+}
+.hud__count { font-size: 16px; color: var(--muted); }
+.hud__count b { font-size: 44px; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; }
+.hud__side { text-align: right; display: grid; gap: 4px; }
+.hud__height { font-size: 14px; color: var(--muted); }
+.hud__height b { font-size: 18px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.hud__mat { font-size: 14px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.hud__mat::before { content: ''; width: 12px; height: 12px; border-radius: 3px; background: #d9a466; }
+.hud__mat[data-material='stone']::before { background: #a1a5ab; }
+.hud__mat[data-material='ice']::before { background: #b8e1ef; box-shadow: 0 0 6px #eefaff; }
+
+.stage {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  display: block;
+  touch-action: none;   /* なぞって動かすので、スクロールや拡大をさせない */
+}
+.controls {
+  display: grid;
+  grid-template-columns: 64px 1fr 64px;
+  gap: 12px;
+  padding:
+    10px
+    max(16px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+.rot {
+  height: 60px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 28px;
+  line-height: 1;
+}
+.rot:active { background: rgba(255, 255, 255, 0.18); }
+
+/* ---- 結果（ステージの上に重ね、後ろの塔が見える） ---- */
+.result {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: calc(max(10px, env(safe-area-inset-top)) + 64px) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+  background: linear-gradient(rgba(20, 25, 36, 0.55), rgba(27, 34, 48, 0) 55%);
+}
+.result__card {
+  width: min(360px, 100%);
+  padding: 22px 20px 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(27, 34, 48, 0.86);
+  text-align: center;
+  display: grid;
+  gap: 8px;
+  animation: rise 0.3s ease-out;
+}
+.result__title { font-size: 26px; letter-spacing: 0.08em; }
+.result__score { display: flex; justify-content: center; align-items: baseline; gap: 18px; color: var(--muted); font-size: 16px; }
+.result__score b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.result__score span:first-child b { font-size: 52px; line-height: 1.1; }
+.result__score span:last-child b { font-size: 22px; }
+.result__new { color: var(--accent); font-weight: 700; }
+.result__best { color: var(--muted); font-size: 13px; }
+.result__card .big { margin-top: 6px; }
+.result__row { display: flex; gap: 10px; justify-content: center; }
+@keyframes rise { from { transform: translateY(16px); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .result__card { animation: none; }
+}

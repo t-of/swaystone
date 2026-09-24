@@ -31,25 +31,56 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <main class="app">
-    <header class="bar">
-      <h1 class="bar__title">ゆらづみ</h1>
-      <div class="bar__actions">
-        <button class="pill" data-wak="install" hidden>アプリにする</button>
-        <button class="pill" data-wak="share">共有</button>
+  <section class="title" id="title">
+    <h1 class="title__name">ゆらづみ</h1>
+    <p class="title__tag">木と石と氷を積むタワー</p>
+    <canvas class="title__sample" id="sample" aria-hidden="true"></canvas>
+    <ol class="howto">
+      <li>画面をなぞって左右に動かし、↺ ↻ で回す</li>
+      <li>「落とす」で落とす。石は重く、氷はすべる</li>
+      <li>1 つでも土台から落ちたら終わり</li>
+    </ol>
+    <p class="title__best">ベスト <span id="titleBest">0 個 ・ 0.0 m</span></p>
+    <button class="big" id="start">はじめる</button>
+    <div class="title__sub">
+      <button class="pill" data-wak="install" hidden>アプリにする</button>
+      <button class="pill" data-wak="share">共有</button>
+    </div>
+    <p class="credit"><a href="/">T.OF...</a> のアプリ</p>
+  </section>
+
+  <section class="play" id="play" hidden>
+    <header class="hud">
+      <p class="hud__count"><b id="count">0</b> 個</p>
+      <div class="hud__side">
+        <p class="hud__height">高さ <b id="height">0.0 m</b></p>
+        <p class="hud__mat" id="mat" data-material="wood">木・ふつう</p>
       </div>
     </header>
+    <canvas class="stage" id="stage"></canvas>
+    <div class="controls">
+      <button class="rot" id="rotL" aria-label="左に回す">↺</button>
+      <button class="big drop" id="drop">落とす</button>
+      <button class="rot" id="rotR" aria-label="右に回す">↻</button>
+    </div>
 
-    <section class="stage" id="stage">
-      <!-- ここにゲーム本体 -->
-    </section>
-
-    <footer class="credit">
-      <a href="/">T.OF...</a> のアプリ
-    </footer>
-  </main>
+    <div class="result" id="result" hidden>
+      <div class="result__card">
+        <h2 class="result__title">くずれた！</h2>
+        <p class="result__score"><span><b id="rCount">0</b> 個</span><span>高さ <b id="rHeight">0.0 m</b></span></p>
+        <p class="result__new" id="rNew" hidden>ベスト更新</p>
+        <p class="result__best" id="rBest"></p>
+        <button class="big" id="again">もう一度</button>
+        <div class="result__row">
+          <button class="pill" id="shareResult">共有</button>
+          <button class="pill" id="toTitle">タイトルへ</button>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <script src="./webapp-kit/webapp-kit.js"></script>
-  <script src="./main.js"></script>
+  <script src="./vendor/matter.min.js"></script>
+  <script type="module" src="./main.js"></script>
 </body>
 </html>
