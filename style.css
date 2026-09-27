@@ -48,6 +48,14 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
   box-shadow: 0 6px 0 #a8742c;
 }
 .big:active { transform: translateY(3px); box-shadow: 0 3px 0 #a8742c; }
+.big--alt {
+  min-height: 52px;
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg);
+  box-shadow: none;
+}
+.big--alt:active { transform: translateY(2px); box-shadow: none; }
 
 /* ---- タイトル（画面の端はセーフエリアの分だけ内側に。高さは 100dvh） ---- */
 .title {
@@ -92,10 +100,45 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 }
 .title__best { color: var(--muted); font-size: 14px; }
 .title__best span { color: var(--fg); font-weight: 700; }
-.title .big { width: min(280px, 100%); margin-top: 4px; }
+.modes { display: grid; gap: 8px; width: min(280px, 100%); margin-top: 4px; }
+.modes .big { width: 100%; margin-top: 0; }
 .title__sub { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .credit { font-size: 12px; color: var(--muted); }
 .credit a { color: inherit; display: inline-block; min-width: 44px; min-height: 44px; line-height: 44px; padding: 0 6px; }
+
+/* ---- オンライン対戦の部屋づくり ---- */
+.online {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding:
+    max(20px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+}
+.online__box { display: grid; gap: 12px; width: min(300px, 100%); justify-items: center; }
+.online__ttl { font-size: 22px; letter-spacing: 0.06em; }
+.online__box .big { width: 100%; }
+.online__note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.online__code-input {
+  width: 160px;
+  font-size: 36px;
+  letter-spacing: 0.3em;
+  text-align: center;
+  padding: 8px 0 8px 0.3em;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.online__code { font-size: 44px; font-weight: 800; letter-spacing: 0.2em; font-variant-numeric: tabular-nums; }
+.online__wait { color: var(--muted); font-size: 14px; }
+.online__msg { color: var(--accent); font-size: 13px; min-height: 1.2em; }
+.online__msg:empty { display: none; }
 
 /* ---- 遊ぶ ---- */
 .play {
@@ -125,6 +168,15 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .hud__mat::before { content: ''; width: 12px; height: 12px; border-radius: 3px; background: #d9a466; }
 .hud__mat[data-material='stone']::before { background: #a1a5ab; }
 .hud__mat[data-material='ice']::before { background: #b8e1ef; box-shadow: 0 0 6px #eefaff; }
+
+.turn {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 0 0 4px;
+}
+.turn--you { color: var(--accent); }
 
 .stage {
   flex: 1 1 0;
@@ -182,6 +234,8 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .result__score span:last-child b { font-size: 22px; }
 .result__new { color: var(--accent); font-weight: 700; }
 .result__best { color: var(--muted); font-size: 13px; }
+.result__msg { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.result__wait { color: var(--accent); font-size: 13px; }
 .result__card .big { margin-top: 6px; }
 .result__row { display: flex; gap: 10px; justify-content: center; }
 @keyframes rise { from { transform: translateY(16px); opacity: 0; } }

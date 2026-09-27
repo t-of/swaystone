@@ -3,6 +3,7 @@ import {
   WORLD_W, BASE, BASE_FROM_BOTTOM, NEXT_DELAY, OVER_DELAY, KEY_MOVE, ROT_STEP, ROT_SPEED, ROT_HOLD,
   MATERIALS, PHYSICS, makeBody, pickBlock, clampX, standHeight, followHeight, allStill, updateRecord, isOver, spawnYFor, cameraLift,
   viewScale, toU, heightText, shareText, readBest, writeBest, mergeBest,
+  otherTurn, matchResult, isValidCode, randomCode, peerIdFor, parseMsg,
 } from './logic.js';
 import { unlock, isOn, setOn, sfx } from './sound.js';
 
@@ -155,6 +156,40 @@ const keys = { left: false, right: false, up: false, down: false };
 let hold = null;   // ↺ ↻ を押し続けているとき { dir, at }
 let drag = null;   // なぞっている指 { id, x }
 
+// ---- 対戦モード ----
+// mode: 'solo' | 'local'（この端末で交代） | 'online'（PeerJS）
+// role: online だけ 'host' | 'guest'。番のトークンは 'a'（1P・ホスト）/ 'b'（2P・ゲスト）
+let mode = 'solo', role = null;
+let peer = null, conn = null, roomCode = null;
+let myAgain = false, peerAgain = false, inputTimer = null;
+const selfToken = () => (role === 'guest' ? 'b' : 'a');
+const canControl = () => !!(game && !game.over && !game.awaitingDrop && (mode !== 'online' || game.turn === selfToken()));
+const send = (msg) => { try { if (conn && conn.open) conn.send(msg); } catch { /* 送れなくても続ける */ } };
+
+function turnLabel(t) {
+  if (mode === 'local') return t === 'a' ? '1P の番' : '2P の番';
+  return t === selfToken() ? 'あなたの番' : '相手の番';
+}
+function resultTitle(winner) {
+  if (mode === 'local') return winner === 'a' ? '1P の勝ち' : '2P の勝ち';
+  return winner === selfToken() ? 'あなたの勝ち' : 'あなたの負け';
+}
+function updateTurnBanner() {
+  const el = $('turnBanner');
+  if (mode === 'solo' || !game) { el.hidden = true; return; }
+  el.hidden = false;
+  el.textContent = turnLabel(game.turn);
+  el.classList.toggle('turn--you', mode === 'online' && game.turn === selfToken());
+}
+
+function stopOnline() {
+  clearInterval(inputTimer);
+  inputTimer = null;
+  try { if (conn) conn.close(); } catch { /* もう閉じている */ }
+  try { if (peer) peer.destroy(); } catch { /* もう壊れている */ }
+  conn = null; peer = null; role = null; roomCode = null;
+}
+
 function resize() {
   const r = canvas.getBoundingClientRect();
   if (!r.width || !r.height) return;
@@ -172,20 +207,22 @@ function resize() {
 }
 new ResizeObserver(resize).observe(canvas);
 
-const now = () => (engine ? engine.timing.timestamp : 0);
+const now = () => (engine ? engine.timing.timestamp : performance.now());
 const camTop = () => BASE_FROM_BOTTOM - view.h - game.lift;   // 画面の上の端の y
 
 // 画面の切り替え（隠すのは hidden = display: none）
 function show(s) {
   screen = s;
   $('title').hidden = s !== 'title';
-  $('play').hidden = s === 'title';
+  $('online').hidden = s !== 'online';
+  $('play').hidden = s === 'title' || s === 'online';
   $('result').hidden = s !== 'over';
   $('play').classList.toggle('is-over', s === 'over');
   if (s === 'title') $('titleBest').textContent = `${best.count} 個 ・ ${heightText(best.height)}`;
 }
 
-function start() {
+// 対戦の 1 局を始める。turn は最初の番（'a'/'b'。solo では使わない）
+function start(turn = 'a') {
   if (runner) Runner.stop(runner);
   engine = Engine.create({ positionIterations: 10, velocityIterations: 10, enableSleeping: PHYSICS.sleeping });
   engine.gravity.y = PHYSICS.gravity;
@@ -200,31 +237,65 @@ function start() {
     rec: { stillSince: null, height: 0 },      // 高さの記録（全部が止まったときだけ更新）
     height: 0,                                 // 表示と保存に使う高さ（u）
     lift: 0, cardBottom: 0,
+    turn, lastDropper: null, lastStateAt: 0,   // 二人対戦だけで使う
   };
+  myAgain = false; peerAgain = false;
   show('play');
   resize();
   hud();
+  updateTurnBanner();
   runner = Runner.run(Runner.create(), engine);
-  runner.enabled = !document.hidden;
+  runner.enabled = mode === 'online' && role === 'host' ? true : !document.hidden;
+  if (mode === 'online' && role === 'host') send({ type: 'start', first: turn });
+}
+
+// ゲスト（オンラインの入る側）は物理を動かさず、ホストから届く値をそのまま描くだけ
+function startGuestView(turn) {
+  if (runner) Runner.stop(runner);
+  engine = null; runner = null;
+  game = {
+    held: null, blocks: [], count: 0, over: false,
+    height: 0, lift: 0, cardBottom: 0,
+    turn, lastDropper: null,
+  };
+  myAgain = false; peerAgain = false;
+  show('play');
+  resize();
+  hud();
+  updateTurnBanner();
 }
 
 function toTitle() {
   if (runner) Runner.stop(runner);
+  if (mode === 'online') stopOnline();
+  mode = 'solo';
   show('title');
+}
+
+function onlineShow(step) {
+  show('online');
+  $('onlinePick').hidden = step !== 'pick';
+  $('onlineJoinBox').hidden = step !== 'join';
+  $('onlineHostBox').hidden = step !== 'host';
 }
 
 // 出てくるブロックは、落とすまで物理の世界に入れない（重力を受けず、何にもぶつからない）
 function spawn() {
   const { shape, material } = pickBlock();
-  game.held = newBlock(shape, material, WORLD_W / 2, 0);
-  Body.setPosition(game.held, { x: WORLD_W / 2, y: spawnYFor(game.stand) });
+  showHeld(shape, material, spawnYFor(game.stand));
+  if (mode === 'online' && role === 'host') send({ type: 'block', shape, material });
+}
+
+// held のブロックを画面に出す（表示だけ。ゲスト側でも host からの 'block' で同じことをする）
+function showHeld(shape, material, y) {
+  game.held = newBlock(shape, material, WORLD_W / 2, y);
   const m = MATERIALS[material];
   $('mat').textContent = `${m.name}・${m.note}`;
   $('mat').dataset.material = material;
 }
 
 function rotate(a) {
-  if (!game?.held) return;
+  if (!game?.held || !canControl()) return;
   Body.rotate(game.held, a);
   sfx.rotate();
 }
@@ -241,9 +312,17 @@ function landed(e) {
   }
 }
 
+// ボタン・キーから呼ぶ。自分の番でなければ何もしない
 function drop() {
   const b = game?.held;
-  if (!b || game.over) return;
+  if (!b || game.over || !canControl()) return;
+  if (mode === 'online' && role === 'guest') { game.awaitingDrop = true; send({ type: 'drop' }); return; }   // 物理はホストだけ動かす
+  performDrop();
+}
+
+// 実際に物理の世界へ落とす。ホストは自分の番でも、ゲストの 'drop' メッセージを受けたときも呼ぶ
+function performDrop() {
+  const b = game.held;
   Body.setVelocity(b, { x: 0, y: 0 });
   Body.setAngularVelocity(b, 0);
   Composite.add(engine.world, b);
@@ -251,8 +330,10 @@ function drop() {
   game.count++;
   game.held = null;
   game.nextAt = now() + NEXT_DELAY;
+  if (mode !== 'solo') { game.lastDropper = game.turn; game.turn = otherTurn(game.turn); }
   sfx.drop();
   hud();
+  updateTurnBanner();
 }
 
 // 物理の 1 歩（1/60 秒）ごと
@@ -260,11 +341,13 @@ function step() {
   const t = now();
   const b = game.held;
   if (b) {
-    const dx = (keys.right - keys.left) * KEY_MOVE;
-    if (dx) Body.setPosition(b, { x: clampX(b.position.x + dx), y: b.position.y });
-    let da = ((keys.down - keys.up) * ROT_SPEED) / 60;
-    if (hold && t - hold.at > ROT_HOLD) da += (hold.dir * ROT_SPEED) / 60;
-    if (da) Body.rotate(b, da);
+    if (canControl()) {
+      const dx = (keys.right - keys.left) * KEY_MOVE;
+      if (dx) Body.setPosition(b, { x: clampX(b.position.x + dx), y: b.position.y });
+      let da = ((keys.down - keys.up) * ROT_SPEED) / 60;
+      if (hold && t - hold.at > ROT_HOLD) da += (hold.dir * ROT_SPEED) / 60;
+      if (da) Body.rotate(b, da);
+    }
   } else if (!game.over && t >= game.nextAt) spawn();
 
   const snap = game.blocks.map(({ body, droppedAt }) => ({
@@ -292,6 +375,17 @@ function step() {
     sfx.over();
   }
   if (game.over && screen === 'play' && t >= game.overAt) finish();
+
+  // ホストは全ブロック（と持っているブロック）の位置・角度を毎秒 20〜30 回、ゲストに送る
+  if (mode === 'online' && role === 'host' && t - game.lastStateAt >= 35) {
+    game.lastStateAt = t;
+    const r = mode !== 'solo' ? matchResult(snap, game.lastDropper) : null;
+    send({
+      type: 'state', turn: game.turn, over: !!r, loser: r ? r.loser : null, lift: game.lift,
+      blocks: game.blocks.map(({ body }) => ({ x: body.position.x, y: body.position.y, angle: body.angle })),
+      held: game.held ? { x: game.held.position.x, y: game.held.position.y, angle: game.held.angle } : null,
+    });
+  }
 }
 
 function hud() {
@@ -299,19 +393,67 @@ function hud() {
   $('height').textContent = heightText(game.height);
 }
 
+function resetResultUI() {
+  $('rScore').hidden = false;
+  $('rMsg').hidden = true;
+  $('rWaitMsg').hidden = true;
+  $('again').hidden = false;
+}
+
 function finish() {
+  if (mode === 'solo') return finishSolo();
+  return showMultiResult(game.lastDropper);
+}
+
+function finishSolo() {
+  resetResultUI();
   const r = mergeBest(best, game.count, game.height);
   best = r.best;
   writeBest(best);
+  $('rTitle').textContent = 'くずれた！';
   $('rCount').textContent = game.count;
   $('rHeight').textContent = heightText(game.height);
   const news = [r.newCount && '個数', r.newHeight && '高さ'].filter(Boolean);
   $('rNew').hidden = !news.length;
   if (news.length) sfx.best();
   $('rNew').textContent = `ベスト更新（${news.join('・')}）`;
+  $('rBest').hidden = false;
   $('rBest').textContent = `ベスト ${best.count} 個 ・ ${heightText(best.height)}`;
+  placeResultCard();
+}
+
+// 二人対戦（同じ端末・オンライン共通）の結果。自己ベストは更新しない
+function showMultiResult(loser) {
+  if (!loser || game.shownResult) return;
+  game.over = true;
+  game.shownResult = true;
+  resetResultUI();
+  const winner = otherTurn(loser);
+  $('rTitle').textContent = resultTitle(winner);
+  $('rCount').textContent = game.count;
+  $('rHeight').textContent = heightText(game.height);
+  $('rNew').hidden = true;
+  $('rBest').hidden = true;
+  placeResultCard();
+}
+
+function showNetError(msg) {
+  if (runner) Runner.stop(runner);
+  game.over = true;
+  $('rTitle').textContent = 'つながりが切れました';
+  $('rScore').hidden = true;
+  $('rNew').hidden = true;
+  $('rBest').hidden = true;
+  $('rWaitMsg').hidden = true;
+  $('rMsg').hidden = false;
+  $('rMsg').textContent = msg;
+  $('again').hidden = true;
   show('over');
-  // カードが世界の列（幅 360）と左右で重なっていれば、カードの下の端（世界の長さ）を覚えておく
+}
+
+// カードが世界の列（幅 360）と左右で重なっていれば、カードの下の端（世界の長さ）を覚えておく
+function placeResultCard() {
+  show('over');
   const cr = document.querySelector('.result__card').getBoundingClientRect();
   const vr = canvas.getBoundingClientRect();
   const colL = vr.left + view.ox * view.scale, colR = colL + WORLD_W * view.scale;
@@ -356,7 +498,7 @@ canvas.addEventListener('pointermove', (e) => {
   const dx = (e.clientX - drag.x) / view.scale;
   drag.x = e.clientX;
   const b = game?.held;
-  if (b) Body.setPosition(b, { x: clampX(b.position.x + dx), y: b.position.y });
+  if (b && canControl()) Body.setPosition(b, { x: clampX(b.position.x + dx), y: b.position.y });
 });
 for (const t of ['pointerup', 'pointercancel']) canvas.addEventListener(t, () => { drag = null; });
 
@@ -381,9 +523,9 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => { if (KEYS[e.key]) keys[KEYS[e.key]] = false; });
 
-// 画面が隠れたら物理を止める
+// 画面が隠れたら物理を止める。オンラインのホストは相手を待たせないので止めない
 document.addEventListener('visibilitychange', () => {
-  if (runner) runner.enabled = !document.hidden;
+  if (runner) runner.enabled = (mode === 'online' && role === 'host') ? true : !document.hidden;
   for (const k in keys) keys[k] = false;
   hold = null;
 });
@@ -391,7 +533,10 @@ document.addEventListener('visibilitychange', () => {
 // 最初の音は触ったときに鳴らせるよう、どこを触っても音の準備をする
 addEventListener('pointerdown', unlock, true);
 addEventListener('keydown', unlock, true);
-for (const id of ['start', 'again', 'toTitle', 'shareResult']) $(id).addEventListener('click', () => sfx.tap());
+for (const id of [
+  'startSolo', 'startLocal', 'startOnline', 'again', 'toTitle', 'shareResult',
+  'roomCreate', 'roomJoinOpen', 'roomJoin', 'onlineBack', 'joinBack', 'hostCancel', 'hostShare',
+]) $(id).addEventListener('click', () => sfx.tap());
 
 // 音のオン・オフ
 function syncSound() {
@@ -401,10 +546,180 @@ function syncSound() {
 $('sound').addEventListener('click', () => { setOn(!isOn()); syncSound(); sfx.tap(); });
 syncSound();
 
-$('start').addEventListener('click', start);
-$('again').addEventListener('click', start);
+$('startSolo').addEventListener('click', () => { mode = 'solo'; role = null; start(); });
+$('startLocal').addEventListener('click', () => { mode = 'local'; role = null; start(); });
+$('startOnline').addEventListener('click', () => onlineShow('pick'));
 $('toTitle').addEventListener('click', toTitle);
 $('shareResult').addEventListener('click', () => WebAppKit.share({ text: shareText(game.count, game.height) }));
 
-show('title');
+$('again').addEventListener('click', () => {
+  if (mode !== 'online') { start(); return; }
+  if (role === 'guest') {
+    myAgain = true;
+    $('rWaitMsg').hidden = false;
+    send({ type: 'again' });
+    return;
+  }
+  myAgain = true;
+  $('rWaitMsg').hidden = false;
+  send({ type: 'again' });
+  tryRestartOnline();
+});
+function tryRestartOnline() {
+  if (role === 'host' && myAgain && peerAgain) start('a');
+}
+
+// ---- オンライン対戦（PeerJS）: 部屋を作る・入る ----
+function netMsg(id, text) { $(id).textContent = text; }
+const CONN_FAIL = 'つながりませんでした。会社や学校の回線などでは、つながらないことがあります。';
+
+function newPeer(id) {
+  if (typeof Peer === 'undefined') return null;
+  try { return id ? new Peer(id) : new Peer(); } catch { return null; }
+}
+
+$('roomCreate').addEventListener('click', () => {
+  onlineShow('host');
+  $('hostCode').textContent = '・・・・';
+  netMsg('hostMsg', '');
+  hostCreate(randomCode(), 0);
+});
+
+function hostCreate(code, tries) {
+  stopOnline();
+  peer = newPeer(peerIdFor(code));
+  if (!peer) { netMsg('hostMsg', CONN_FAIL); return; }
+  peer.on('open', () => {
+    roomCode = code;
+    $('hostCode').textContent = code;
+  });
+  peer.on('error', (err) => {
+    if (err && err.type === 'unavailable-id' && tries < 5) { hostCreate(randomCode(), tries + 1); return; }
+    if (screen === 'play' || screen === 'over') showNetError(CONN_FAIL); else netMsg('hostMsg', CONN_FAIL);
+  });
+  peer.on('connection', (c) => {
+    if (conn) { c.close(); return; }   // 3 人目以降は断る
+    conn = c;
+    role = 'host';
+    conn.on('open', () => { mode = 'online'; start('a'); });
+    conn.on('data', onData);
+    conn.on('close', onConnLost);
+  });
+  peer.on('disconnected', onConnLost);
+}
+
+$('hostShare').addEventListener('click', () => {
+  const url = `${location.origin}${location.pathname}?room=${roomCode ?? ''}`;
+  WebAppKit.share({ text: `SWAYSTONE で対戦しよう（合言葉 ${roomCode ?? ''}）`, url });
+});
+$('hostCancel').addEventListener('click', () => { stopOnline(); onlineShow('pick'); });
+$('onlineBack').addEventListener('click', () => { stopOnline(); show('title'); });
+$('joinBack').addEventListener('click', () => { stopOnline(); onlineShow('pick'); });
+
+$('roomJoinOpen').addEventListener('click', () => { netMsg('joinMsg', ''); onlineShow('join'); $('roomCode').focus(); });
+$('roomJoin').addEventListener('click', () => joinRoom($('roomCode').value.trim()));
+$('roomCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoom($('roomCode').value.trim()); });
+
+function joinRoom(code) {
+  if (!isValidCode(code)) { netMsg('joinMsg', '4 桁の数字を入れてください'); return; }
+  netMsg('joinMsg', 'つないでいます…');
+  stopOnline();
+  peer = newPeer();
+  if (!peer) { netMsg('joinMsg', CONN_FAIL); return; }
+  peer.on('open', () => {
+    conn = peer.connect(peerIdFor(code), { reliable: true });
+    role = 'guest';
+    mode = 'online';
+    conn.on('open', () => {
+      inputTimer = setInterval(sendInput, 50);   // 手元のブロックの x と角度を毎秒 20 回ほど送る
+    });
+    conn.on('data', onData);
+    conn.on('close', onConnLost);
+    conn.on('error', () => (screen === 'play' || screen === 'over') ? showNetError(CONN_FAIL) : netMsg('joinMsg', CONN_FAIL));
+  });
+  peer.on('error', () => (screen === 'play' || screen === 'over') ? showNetError(CONN_FAIL) : netMsg('joinMsg', CONN_FAIL));
+  peer.on('disconnected', onConnLost);
+}
+
+function sendInput() {
+  if (role !== 'guest' || !game?.held || !canControl()) return;
+  send({ type: 'input', x: game.held.position.x, y: game.held.position.y, angle: game.held.angle });
+}
+
+function onConnLost() {
+  if (screen === 'play' || screen === 'over') showNetError(CONN_FAIL);
+}
+
+// 受け取った値は信用しない。壊れている・知らない type は logic.js の parseMsg が捨てる
+function onData(raw) {
+  const msg = parseMsg(raw);
+  if (!msg) return;
+  if (msg.type === 'start' && role === 'guest') startGuestView(msg.first);
+  else if (msg.type === 'block' && role === 'guest') onBlockMsg(msg);
+  else if (msg.type === 'state' && role === 'guest') onState(msg);
+  else if (msg.type === 'input' && role === 'host') onRemoteInput(msg);
+  else if (msg.type === 'drop' && role === 'host') onRemoteDrop();
+  else if (msg.type === 'again') { peerAgain = true; tryRestartOnline(); }
+}
+
+function onRemoteInput(msg) {
+  if (!game?.held || game.turn !== 'b') return;
+  Body.setPosition(game.held, { x: clampX(msg.x), y: msg.y });
+  Body.setAngle(game.held, msg.angle);
+}
+
+function onRemoteDrop() {
+  if (!game?.held || game.over || game.turn !== 'b') return;
+  performDrop();
+}
+
+function onBlockMsg(msg) {
+  if (!game) return;
+  game.awaitingDrop = false;
+  showHeld(msg.shape, msg.material, spawnYFor(game.stand || 0));
+}
+
+function onState(msg) {
+  if (!game) return;
+  game.turn = msg.turn;
+  while (game.blocks.length < msg.blocks.length) {
+    if (!game.held) break;   // 届く前に見た目が壊れていたら、これ以上は増やさない
+    game.blocks.push({ body: game.held });
+    game.held = null;
+  }
+  msg.blocks.forEach((p, i) => {
+    const body = game.blocks[i]?.body;
+    if (!body) return;
+    Body.setPosition(body, { x: p.x, y: p.y });
+    Body.setAngle(body, p.angle);
+  });
+  game.stand = standHeight(game.blocks.map(({ body }) => ({ landed: true, top: body.bounds.min.y })));
+  if (msg.held) {
+    if (game.held && game.turn !== selfToken()) {
+      Body.setPosition(game.held, { x: msg.held.x, y: msg.held.y });
+      Body.setAngle(game.held, msg.held.angle);
+    }
+  } else {
+    game.held = null;
+  }
+  // 塔が伸びて近づいたら、持っているブロックも上げる（下げはしない。自分の番のときだけ）
+  if (game.held && game.turn === selfToken()) {
+    const y = spawnYFor(game.stand);
+    if (y < game.held.position.y) Body.setPosition(game.held, { x: game.held.position.x, y });
+  }
+  game.lift = msg.lift;
+  game.count = game.blocks.length;
+  hud();
+  updateTurnBanner();
+  if (msg.over) showMultiResult(msg.loser);
+}
+
+// ?room=1234 で開いたら、合言葉が入った状態で入る画面を出す
+const roomParam = new URLSearchParams(location.search).get('room');
+if (roomParam && isValidCode(roomParam)) {
+  onlineShow('join');
+  $('roomCode').value = roomParam;
+} else {
+  show('title');
+}
 drawSample();

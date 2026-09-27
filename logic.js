@@ -177,3 +177,56 @@ export function mergeBest(best, count, height) {
     newHeight: height > best.height,
   };
 }
+
+// ---- 二人対戦（同じ端末・オンライン共通） ----
+// 番は 'a' / 'b'。同じ端末なら a=1P・b=2P、オンラインなら a=ホスト・b=ゲスト
+export const otherTurn = (turn) => (turn === 'a' ? 'b' : 'a');
+
+// isOver が立った時点で、最後に落とした人（lastDropper）の負け
+export function matchResult(blocks, lastDropper) {
+  if (!lastDropper || !isOver(blocks)) return null;
+  return { winner: otherTurn(lastDropper), loser: lastDropper };
+}
+
+// ---- オンライン対戦（PeerJS）: 合言葉と peer id ----
+export const isValidCode = (s) => typeof s === 'string' && /^\d{4}$/.test(s);
+export const randomCode = (rand = Math.random) => String(Math.floor(rand() * 10000)).padStart(4, '0');
+export const peerIdFor = (code) => `tof-swaystone-${code}`;
+
+// ---- オンライン対戦: 送るメッセージの形。受け取った値は信用しない（数値は範囲に収め、知らない type は捨てる） ----
+const MSG_TYPES = ['start', 'block', 'input', 'drop', 'state', 'again'];
+const TURNS = ['a', 'b'];
+const clampNum = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null);
+const toXYA = (o) => {
+  if (!o || typeof o !== 'object') return null;
+  const x = clampNum(o.x, -1e6, 1e6), y = clampNum(o.y, -1e6, 1e6), angle = clampNum(o.angle, -1e6, 1e6);
+  return (x == null || y == null || angle == null) ? null : { x, y, angle };
+};
+
+// raw（相手から届いた、何でもありうる値）を、決まった形に直す。おかしければ null
+export function parseMsg(raw) {
+  if (!raw || typeof raw !== 'object' || !MSG_TYPES.includes(raw.type)) return null;
+  const t = raw.type;
+  if (t === 'start') return TURNS.includes(raw.first) ? { type: t, first: raw.first } : null;
+  if (t === 'block') {
+    const shape = typeof raw.shape === 'string' && SHAPES[raw.shape] ? raw.shape : null;
+    const material = typeof raw.material === 'string' && MATERIALS[raw.material] ? raw.material : null;
+    return (shape && material) ? { type: t, shape, material } : null;
+  }
+  if (t === 'input') {
+    const xya = toXYA(raw);
+    return xya && { type: t, ...xya };
+  }
+  if (t === 'drop' || t === 'again') return { type: t };
+  if (t === 'state') {
+    if (!Array.isArray(raw.blocks) || !TURNS.includes(raw.turn)) return null;
+    const blocks = raw.blocks.map(toXYA);
+    if (blocks.some((b) => !b)) return null;   // 1 つでもおかしければ、この state 全体を捨てる
+    const held = raw.held == null ? null : toXYA(raw.held);
+    if (raw.held != null && !held) return null;
+    const lift = clampNum(raw.lift, -1e6, 1e6) ?? 0;
+    const loser = TURNS.includes(raw.loser) ? raw.loser : null;
+    return { type: t, turn: raw.turn, over: raw.over === true, loser, lift, blocks, held };
+  }
+  return null;
+}

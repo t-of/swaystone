@@ -41,13 +41,44 @@
       <li>1 つでも土台から落ちたら終わり</li>
     </ol>
     <p class="title__best">ベスト <span id="titleBest">0 個 ・ 0.0 m</span></p>
-    <button class="big" id="start">はじめる</button>
+    <div class="modes">
+      <button class="big" id="startSolo">ひとりで</button>
+      <button class="big big--alt" id="startLocal">ふたりで（この端末）</button>
+      <button class="big big--alt" id="startOnline">オンライン（合言葉）</button>
+    </div>
     <div class="title__sub">
       <button class="pill" data-wak="install" hidden>アプリにする</button>
       <button class="pill" data-wak="share">共有</button>
       <button class="pill" id="sound" aria-pressed="true">音 オン</button>
     </div>
     <p class="credit"><a href="/">T.OF...</a> のアプリ・<a href="https://t-of.github.io/contact/">問い合わせ</a></p>
+  </section>
+
+  <section class="online" id="online" hidden>
+    <div class="online__box" id="onlinePick">
+      <h2 class="online__ttl">オンライン対戦</h2>
+      <button class="big" id="roomCreate">部屋を作る</button>
+      <button class="big big--alt" id="roomJoinOpen">部屋に入る</button>
+      <p class="online__note">相手の端末と直接つながります。会社や学校の回線などでは、つながらないことがあります。</p>
+      <button class="pill" id="onlineBack">タイトルへ</button>
+    </div>
+    <div class="online__box" id="onlineJoinBox" hidden>
+      <h2 class="online__ttl">部屋に入る</h2>
+      <p>4 桁の合言葉を入れてね</p>
+      <input class="online__code-input" id="roomCode" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000">
+      <button class="big" id="roomJoin">入る</button>
+      <p class="online__msg" id="joinMsg"></p>
+      <button class="pill" id="joinBack">もどる</button>
+    </div>
+    <div class="online__box" id="onlineHostBox" hidden>
+      <h2 class="online__ttl">部屋を作った</h2>
+      <p>合言葉</p>
+      <p class="online__code" id="hostCode">・・・・</p>
+      <p class="online__wait">相手を待っています…</p>
+      <button class="pill" id="hostShare">共有</button>
+      <p class="online__msg" id="hostMsg"></p>
+      <button class="pill" id="hostCancel">やめる</button>
+    </div>
   </section>
 
   <section class="play" id="play" hidden>
@@ -58,6 +89,7 @@
         <p class="hud__mat" id="mat" data-material="wood">木・ふつう</p>
       </div>
     </header>
+    <p class="turn" id="turnBanner" hidden></p>
     <canvas class="stage" id="stage"></canvas>
     <div class="controls">
       <button class="rot" id="rotL" aria-label="左に回す">↺</button>
@@ -67,10 +99,12 @@
 
     <div class="result" id="result" hidden>
       <div class="result__card">
-        <h2 class="result__title">くずれた！</h2>
-        <p class="result__score"><span><b id="rCount">0</b> 個</span><span>高さ <b id="rHeight">0.0 m</b></span></p>
+        <h2 class="result__title" id="rTitle">くずれた！</h2>
+        <p class="result__score" id="rScore"><span><b id="rCount">0</b> 個</span><span>高さ <b id="rHeight">0.0 m</b></span></p>
         <p class="result__new" id="rNew" hidden>ベスト更新</p>
         <p class="result__best" id="rBest"></p>
+        <p class="result__msg" id="rMsg" hidden></p>
+        <p class="result__wait" id="rWaitMsg" hidden>相手を待っています…</p>
         <button class="big" id="again">もう一度</button>
         <div class="result__row">
           <button class="pill" id="shareResult">共有</button>
@@ -82,6 +116,7 @@
 
   <script src="./webapp-kit/webapp-kit.js"></script>
   <script src="./vendor/matter.min.js"></script>
+  <script src="./vendor/peerjs.min.js"></script>
   <script type="module" src="./main.js"></script>
 </body>
 </html>

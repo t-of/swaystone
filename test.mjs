@@ -227,4 +227,52 @@ test('物理で: 板を立てて落としても、倒れる前の高さは記録
   assert.ok(rec.height > 0 && rec.height < 40, `記録は倒れたあとの高さ（${rec.height.toFixed(1)}）`);
 });
 
+test('二人対戦: 番の交代、最後に落とした人が負け', () => {
+  assert.equal(L.otherTurn('a'), 'b');
+  assert.equal(L.otherTurn('b'), 'a');
+  assert.equal(L.matchResult([{ y: 0 }], 'a'), null, 'まだ落ちていない');
+  assert.equal(L.matchResult([{ y: 5000 }], null), null, '誰も落としていないと負けは決まらない');
+  assert.deepEqual(L.matchResult([{ y: 5000 }], 'a'), { winner: 'b', loser: 'a' });
+  assert.deepEqual(L.matchResult([{ y: 5000 }], 'b'), { winner: 'a', loser: 'b' });
+});
+
+test('オンライン対戦: 合言葉と peer id', () => {
+  assert.equal(L.isValidCode('1234'), true);
+  assert.equal(L.isValidCode('123'), false);
+  assert.equal(L.isValidCode('abcd'), false);
+  assert.equal(L.isValidCode(1234), false);
+  assert.equal(L.peerIdFor('0007'), 'tof-swaystone-0007');
+  let seed = 1;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 200; i++) assert.ok(L.isValidCode(L.randomCode(rand)));
+});
+
+test('オンライン対戦: 送るメッセージの形。壊れた・知らない値は捨てる', () => {
+  assert.equal(L.parseMsg(null), null);
+  assert.equal(L.parseMsg('boo'), null);
+  assert.equal(L.parseMsg({ type: 'nope' }), null, '知らない type は捨てる');
+  assert.deepEqual(L.parseMsg({ type: 'start', first: 'a' }), { type: 'start', first: 'a' });
+  assert.equal(L.parseMsg({ type: 'start', first: 'z' }), null);
+
+  assert.deepEqual(L.parseMsg({ type: 'block', shape: 'I5', material: 'wood' }), { type: 'block', shape: 'I5', material: 'wood' });
+  assert.equal(L.parseMsg({ type: 'block', shape: '<script>', material: 'wood' }), null, '知らない形は捨てる');
+  assert.equal(L.parseMsg({ type: 'block', shape: 'I5', material: 'gold' }), null, '知らない材質は捨てる');
+
+  assert.deepEqual(L.parseMsg({ type: 'drop' }), { type: 'drop' });
+  assert.deepEqual(L.parseMsg({ type: 'again' }), { type: 'again' });
+
+  assert.deepEqual(L.parseMsg({ type: 'input', x: 100, y: 0, angle: 0.5 }), { type: 'input', x: 100, y: 0, angle: 0.5 });
+  assert.deepEqual(L.parseMsg({ type: 'input', x: 1e9, y: 0, angle: -1e9 }), { type: 'input', x: 1e6, y: 0, angle: -1e6 }, '数値は範囲に収める');
+  assert.equal(L.parseMsg({ type: 'input', x: 'x', y: 0, angle: 0 }), null, '数でなければ捨てる');
+
+  const okState = { type: 'state', turn: 'b', over: false, loser: null, lift: 30, blocks: [{ x: 1, y: 2, angle: 0.1 }], held: { x: 3, y: 4, angle: 0.2 } };
+  assert.deepEqual(L.parseMsg(okState), okState);
+  assert.deepEqual(L.parseMsg({ ...okState, held: null }), { ...okState, held: null });
+  assert.equal(L.parseMsg({ ...okState, turn: 'c' }), null, '知らない turn は捨てる');
+  assert.equal(L.parseMsg({ ...okState, blocks: [{ x: 1, y: 2, angle: 'x' }] }), null, '1 つでもおかしければ全体を捨てる');
+  assert.equal(L.parseMsg({ ...okState, blocks: 'not-array' }), null);
+  const withLoser = L.parseMsg({ ...okState, over: true, loser: 'a' });
+  assert.deepEqual(withLoser, { ...okState, over: true, loser: 'a' });
+});
+
 console.log(`\n${n} 件すべて合格`);

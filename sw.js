@@ -9,7 +9,7 @@
 
 const PREFIX = 'swaystone-';
 const OLD_PREFIX = 'yurazumi-';  // 旧名「ゆらづみ」。古いキャッシュを消すためだけに残す
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `${PREFIX}${VERSION}`;
 const FONT_CACHE = `${PREFIX}fonts`;
 
@@ -21,6 +21,7 @@ const SHELL = [
   './logic.js',
   './sound.js',
   './vendor/matter.min.js',
+  './vendor/peerjs.min.js',
   './manifest.webmanifest',
   './webapp-kit/webapp-kit.css',
   './webapp-kit/webapp-kit.js',
