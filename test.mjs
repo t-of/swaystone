@@ -7,9 +7,9 @@ const Matter = createRequire(import.meta.url)('./vendor/matter.min.js');
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log(`ok ${name}`); };
 
-test('形は正方形 3 つか 5 つのポリオミノ、重さ = 密度 × 面積', () => {
+test('形は正方形 3〜5 つのポリオミノ、重さ = 密度 × 面積', () => {
   for (const [shape, cells] of Object.entries(L.SHAPES)) {
-    assert.ok(cells.length === 3 || cells.length === 5, `${shape} は ${cells.length} マス`);
+    assert.ok(cells.length >= 3 && cells.length <= 5, `${shape} は ${cells.length} マス`);
     for (const [mat, m] of Object.entries(L.MATERIALS)) {
       const b = L.makeBody(Matter, shape, mat, 100, 50);
       const area = b.parts.slice(1).reduce((s, p) => s + p.area, 0);

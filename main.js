@@ -82,7 +82,7 @@ function drawBlock(c, body) {
     for (let i = 1; i < v.length; i++) c.lineTo(v[i].x, v[i].y);
     c.closePath();
   }
-  // 太い線を先に引いてから塗ると、部品を組み合わせた形（ほね）でも外側だけにふちが出る
+  // 太い線を先に引いてから塗ると、正方形を組み合わせた形でも外側だけにふちが出る（マスの境目は描かない）
   c.lineJoin = 'round';
   c.lineWidth = 2.6;
   c.strokeStyle = look.edge;
