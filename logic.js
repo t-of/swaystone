@@ -22,55 +22,48 @@ export const ROT_STEP = Math.PI / 12; // ↺ ↻ を 1 回押すと 15°
 export const ROT_SPEED = (120 * Math.PI) / 180;  // 押し続けると 1 秒に 120°
 export const ROT_HOLD = 300;          // ms。これより長く押したら回り続ける
 
-// ---- 材質（遊んで調整する数値はここだけ） ----
+// ---- 材質と物理（遊んで調整する数値はここだけ） ----
+// 本物より崩れにくくしてある: 摩擦を強く、空気の抵抗を大きく、重力を弱く、回りにくく（慣性 ×INERTIA）、止まったら眠らせる
 export const MATERIALS = {
-  wood:  { name: '木', note: 'ふつう', rate: 0.5, density: 0.0016, friction: 0.70, frictionStatic: 1.00 },
-  stone: { name: '石', note: '重い',   rate: 0.3, density: 0.0024, friction: 0.95, frictionStatic: 1.40 },
-  ice:   { name: '氷', note: 'すべる', rate: 0.2, density: 0.0011, friction: 0.20, frictionStatic: 0.30 },
+  wood:  { name: '木', note: 'ふつう', rate: 0.5, density: 0.0016, friction: 0.95, frictionStatic: 2.0 },
+  stone: { name: '石', note: '重い',   rate: 0.3, density: 0.0024, friction: 1.00, frictionStatic: 3.0 },
+  ice:   { name: '氷', note: 'すべる', rate: 0.2, density: 0.0011, friction: 0.45, frictionStatic: 0.9 },
 };
-const COMMON = { restitution: 0, frictionAir: 0.006 };
+const COMMON = { restitution: 0, frictionAir: 0.03, slop: 0.02 };
+export const PHYSICS = { gravity: 0.6, inertia: 6, sleeping: true };
 
-// ---- 形（4 つの正方形をつないだ形は使わない。凹んだ形も作らない） ----
+// ---- 形（ポリオミノ。正方形 3 つか 5 つをつないだ形。4 つの形はテトリスに寄るので使わない） ----
+export const CELL = 20;
 export const SHAPES = {
-  ita: 'いた', maruishi: 'まるいし', kusabi: 'くさび', hangetsu: 'はんげつ', rokkaku: 'ろっかく', hone: 'ほね',
+  I3: [[0, 0], [1, 0], [2, 0]],
+  L3: [[0, 0], [1, 0], [0, 1]],
+  I5: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]],
+  L5: [[0, 0], [0, 1], [0, 2], [0, 3], [1, 3]],
+  Y5: [[0, 1], [1, 0], [1, 1], [1, 2], [1, 3]],
+  N5: [[0, 0], [0, 1], [1, 1], [1, 2], [1, 3]],
+  P5: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2]],
+  T5: [[0, 0], [1, 0], [2, 0], [1, 1], [1, 2]],
+  U5: [[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
+  V5: [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]],
+  W5: [[0, 0], [0, 1], [1, 1], [1, 2], [2, 2]],
+  X5: [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2]],
+  Z5: [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]],
+  F5: [[1, 0], [2, 0], [0, 1], [1, 1], [1, 2]],
 };
 
-export function ellipse(rx, ry, n) {
-  return Array.from({ length: n }, (_, i) => {
-    const a = (i / n) * Math.PI * 2;
-    return { x: rx * Math.cos(a), y: ry * Math.sin(a) };
-  });
-}
-
-// 平らな面が下、弧が上の半円
-export function halfDisc(r, n) {
-  return Array.from({ length: n }, (_, i) => {
-    const a = (i / (n - 1)) * Math.PI;
-    return { x: r * Math.cos(a), y: -r * Math.sin(a) };
-  });
-}
-
+// 正方形を部品にした 1 つの体。中心（重心）が (x, y) に来る
 export function makeBody(M, shape, material, x, y) {
+  const cells = SHAPES[shape];
+  if (!cells) throw new Error(`知らない形: ${shape}`);
   const m = MATERIALS[material];
   const opt = () => ({ ...COMMON, density: m.density, friction: m.friction, frictionStatic: m.frictionStatic });
-  switch (shape) {
-    case 'ita': return M.Bodies.rectangle(x, y, 4.5 * U, 0.9 * U, { ...opt(), chamfer: { radius: 0.3 * U } });
-    case 'maruishi': return M.Bodies.fromVertices(x, y, [ellipse(1.3 * U, 0.9 * U, 16)], opt());
-    // 下 3u・上 1u（Matter の slope は「上の幅 = (1 - slope) × 下の幅」）
-    case 'kusabi': return M.Bodies.trapezoid(x, y, 3 * U, 1.6 * U, 2 / 3, { ...opt(), chamfer: { radius: 0.2 * U } });
-    case 'hangetsu': return M.Bodies.fromVertices(x, y, [halfDisc(1.6 * U, 12)], opt());
-    // 正六角形（外接円の半径 1.25u）。平らな面が上下に来る向きで作る
-    case 'rokkaku': return M.Bodies.fromVertices(x, y, [ellipse(1.25 * U, 1.25 * U, 6)], opt());
-    case 'hone': return M.Body.create({
-      ...opt(),
-      parts: [
-        M.Bodies.rectangle(x, y, 2.4 * U, 0.7 * U, opt()),
-        M.Bodies.circle(x - 1.2 * U, y, 0.6 * U, opt()),
-        M.Bodies.circle(x + 1.2 * U, y, 0.6 * U, opt()),
-      ],
-    });
-  }
-  throw new Error(`知らない形: ${shape}`);
+  const body = M.Body.create({
+    ...opt(),
+    parts: cells.map(([cx, cy]) => M.Bodies.rectangle(cx * CELL, cy * CELL, CELL, CELL, opt())),
+  });
+  M.Body.setInertia(body, body.inertia * PHYSICS.inertia);
+  M.Body.setPosition(body, { x, y });
+  return body;
 }
 
 // 形は等確率、材質は割合で、それぞれ独立に選ぶ

@@ -1,7 +1,7 @@
 // SWAYSTONE 本体。決まりごと（数値・形・記録）は logic.js、ここは画面・操作・物理のつなぎ。
 import {
   WORLD_W, BASE, BASE_FROM_BOTTOM, NEXT_DELAY, OVER_DELAY, KEY_MOVE, ROT_STEP, ROT_SPEED, ROT_HOLD,
-  MATERIALS, makeBody, pickBlock, clampX, standHeight, updateRecord, isOver, spawnYFor, cameraLift,
+  MATERIALS, PHYSICS, makeBody, pickBlock, clampX, standHeight, updateRecord, isOver, spawnYFor, cameraLift,
   viewScale, toU, heightText, shareText, readBest, writeBest, mergeBest,
 } from './logic.js';
 import { unlock, isOn, setOn, sfx } from './sound.js';
@@ -133,8 +133,8 @@ function drawSample() {
   drawBase(c);
   let top = 0;
   for (const [shape, material, x, angle] of [
-    ['ita', 'wood', 180, 0], ['kusabi', 'stone', 174, 0], ['ita', 'ice', 186, -0.05],
-    ['rokkaku', 'wood', 170, 0.08], ['hangetsu', 'stone', 176, 0],
+    ['I5', 'wood', 180, 0], ['U5', 'stone', 176, 0], ['L3', 'ice', 184, 0],
+    ['T5', 'wood', 178, Math.PI], ['P5', 'stone', 182, 0],
   ]) {
     const b = newBlock(shape, material, x, 0);
     Body.setAngle(b, angle);
@@ -187,8 +187,8 @@ function show(s) {
 
 function start() {
   if (runner) Runner.stop(runner);
-  engine = Engine.create({ positionIterations: 10, velocityIterations: 10 });
-  engine.gravity.y = 1;
+  engine = Engine.create({ positionIterations: 10, velocityIterations: 10, enableSleeping: PHYSICS.sleeping });
+  engine.gravity.y = PHYSICS.gravity;
   Composite.add(engine.world, Bodies.rectangle(WORLD_W / 2, BASE.h / 2, BASE.w, BASE.h,
     { isStatic: true, friction: 1, chamfer: { radius: 3 } }));
   Events.on(engine, 'afterUpdate', step);

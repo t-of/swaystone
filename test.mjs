@@ -7,42 +7,50 @@ const Matter = createRequire(import.meta.url)('./vendor/matter.min.js');
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log(`ok ${name}`); };
 
-test('形は 6 種、どれも面積が 4u² 前後、重さ = 密度 × 面積', () => {
-  assert.equal(Object.keys(L.SHAPES).length, 6);
-  for (const shape of Object.keys(L.SHAPES)) {
+test('形は正方形 3 つか 5 つのポリオミノ、重さ = 密度 × 面積', () => {
+  for (const [shape, cells] of Object.entries(L.SHAPES)) {
+    assert.ok(cells.length === 3 || cells.length === 5, `${shape} は ${cells.length} マス`);
     for (const [mat, m] of Object.entries(L.MATERIALS)) {
       const b = L.makeBody(Matter, shape, mat, 100, 50);
-      const area = b.parts.length > 1 ? b.parts.slice(1).reduce((s, p) => s + p.area, 0) : b.area;
-      const u2 = area / (L.U * L.U);
-      assert.ok(u2 > 3.2 && u2 < 4.6, `${shape} の面積 ${u2.toFixed(2)}u²`);
+      const area = b.parts.slice(1).reduce((s, p) => s + p.area, 0);
+      assert.ok(Math.abs(area - cells.length * L.CELL ** 2) < 1e-6, `${shape} の面積`);
       assert.ok(Math.abs(b.mass - m.density * area) < 1e-6, `${shape}/${mat} の重さ`);
       assert.equal(b.friction, m.friction);
       assert.equal(b.frictionStatic, m.frictionStatic);
       assert.equal(b.restitution, 0);
-      assert.ok(Math.abs(b.position.x - 100) < 1 && Math.abs(b.position.y - 50) < 20, `${shape} の位置`);
+      assert.ok(Math.abs(b.position.x - 100) < 1e-6 && Math.abs(b.position.y - 50) < 1e-6, `${shape} の位置`);
     }
   }
 });
 
-test('凹んだ形はない（ほねは凸の部品 3 つ）', () => {
-  for (const shape of Object.keys(L.SHAPES)) {
-    const b = L.makeBody(Matter, shape, 'wood', 0, 0);
-    const parts = b.parts.length > 1 ? b.parts.slice(1) : [b];
-    if (shape === 'hone') assert.equal(parts.length, 3);
-    for (const p of parts) assert.ok(Matter.Vertices.isConvex(p.vertices), shape);
+test('同じ形が 2 つない（回転・裏返しで重なるものも）、マスはつながっている', () => {
+  const norm = (cs) => {
+    const x0 = Math.min(...cs.map((c) => c[0])), y0 = Math.min(...cs.map((c) => c[1]));
+    return cs.map(([x, y]) => `${x - x0},${y - y0}`).sort().join(' ');
+  };
+  const forms = (cs) => {
+    const out = [];
+    for (let f = 0; f < 2; f++) for (let r = 0; r < 4; r++) {
+      let c = cs.map(([x, y]) => (f ? [-x, y] : [x, y]));
+      for (let i = 0; i < r; i++) c = c.map(([x, y]) => [-y, x]);
+      out.push(norm(c));
+    }
+    return out;
+  };
+  const seen = new Set();
+  for (const [shape, cells] of Object.entries(L.SHAPES)) {
+    assert.ok(!seen.has(norm(cells)), `${shape} が重なる`);
+    for (const k of forms(cells)) seen.add(k);
+    const key = new Set(cells.map((c) => c.join(',')));
+    const stack = [cells[0].join(',')], got = new Set(stack);
+    while (stack.length) {
+      const [x, y] = stack.pop().split(',').map(Number);
+      for (const k of [`${x + 1},${y}`, `${x - 1},${y}`, `${x},${y + 1}`, `${x},${y - 1}`]) {
+        if (key.has(k) && !got.has(k)) { got.add(k); stack.push(k); }
+      }
+    }
+    assert.equal(got.size, cells.length, `${shape} がつながっていない`);
   }
-  assert.equal(L.ellipse(1, 1, 16).length, 16);
-  const half = L.halfDisc(10, 12);
-  assert.equal(half.length, 12);
-  assert.ok(half.every((p) => p.y <= 1e-9), 'はんげつは平らな面が下');
-});
-
-test('くさびは下 3u・上 1u', () => {
-  const b = L.makeBody(Matter, 'kusabi', 'wood', 0, 0);
-  const w = b.bounds.max.x - b.bounds.min.x;
-  assert.ok(Math.abs(w - 3 * L.U) < 3, `下の幅 ${w.toFixed(1)}`);  // 角の丸めで少し細くなる
-  const topXs = b.vertices.filter((v) => v.y < b.bounds.min.y + 1).map((v) => v.x);
-  assert.ok(Math.max(...topXs) - Math.min(...topXs) < 1.2 * L.U, '上がせまい');
 });
 
 test('形は等確率、材質は 5:3:2', () => {
@@ -55,7 +63,8 @@ test('形は等確率、材質は 5:3:2', () => {
     shapes[shape] = (shapes[shape] || 0) + 1;
     mats[material] = (mats[material] || 0) + 1;
   }
-  for (const id of Object.keys(L.SHAPES)) assert.ok(Math.abs(shapes[id] / N - 1 / 6) < 0.01, id);
+  const k = Object.keys(L.SHAPES).length;
+  for (const id of Object.keys(L.SHAPES)) assert.ok(Math.abs(shapes[id] / N - 1 / k) < 0.01, id);
   for (const [id, m] of Object.entries(L.MATERIALS)) assert.ok(Math.abs(mats[id] / N - m.rate) < 0.01, id);
   assert.equal(L.pickBlock(() => 0.999999).material, 'ice');
   assert.equal(L.pickBlock(() => 0).material, 'wood');
@@ -185,10 +194,11 @@ test('旧名「ゆらづみ」の記録・設定を新しいキーに引き継�
   assert.equal(s3.d['swaystone.sound'], '0');
 });
 
-test('物理で実際に積める（木のいたを土台に落とすと止まる）', () => {
-  const engine = Matter.Engine.create({ positionIterations: 10, velocityIterations: 10 });
+test('物理で実際に積める（木の I5 を土台に落とすと止まる）', () => {
+  const engine = Matter.Engine.create({ positionIterations: 10, velocityIterations: 10, enableSleeping: L.PHYSICS.sleeping });
+  engine.gravity.y = L.PHYSICS.gravity;
   const base = Matter.Bodies.rectangle(L.WORLD_W / 2, L.BASE.h / 2, L.BASE.w, L.BASE.h, { isStatic: true, friction: 1 });
-  const b = L.makeBody(Matter, 'ita', 'wood', L.WORLD_W / 2, -100);
+  const b = L.makeBody(Matter, 'I5', 'wood', L.WORLD_W / 2, -100);
   Matter.Composite.add(engine.world, [base, b]);
   for (let i = 0; i < 180; i++) Matter.Engine.update(engine, 1000 / 60);
   assert.ok(b.speed < L.SETTLE_SPEED, '止まった');
@@ -197,10 +207,11 @@ test('物理で実際に積める（木のいたを土台に落とすと止ま�
 });
 
 test('物理で: 板を立てて落としても、倒れる前の高さは記録に入らない', () => {
-  const engine = Matter.Engine.create({ positionIterations: 10, velocityIterations: 10 });
+  const engine = Matter.Engine.create({ positionIterations: 10, velocityIterations: 10, enableSleeping: L.PHYSICS.sleeping });
+  engine.gravity.y = L.PHYSICS.gravity;
   const base = Matter.Bodies.rectangle(L.WORLD_W / 2, L.BASE.h / 2, L.BASE.w, L.BASE.h, { isStatic: true, friction: 1 });
-  const b = L.makeBody(Matter, 'ita', 'wood', L.WORLD_W / 2 + 3, -80);
-  Matter.Body.rotate(b, Math.PI / 2 - 0.2);   // ほぼ立てる（高さ 4.5u = 99）。少し傾けてあるので倒れる
+  const b = L.makeBody(Matter, 'I5', 'wood', L.WORLD_W / 2 + 3, -80);
+  Matter.Body.rotate(b, Math.PI / 2 - 0.4);   // ほぼ立てる（高さ 100）。傾けてあるので倒れる
   Matter.Composite.add(engine.world, [base, b]);
   let rec = { stillSince: null, height: 0 }, maxTop = 0;
   for (let i = 0; i < 60 * 8; i++) {
