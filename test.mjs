@@ -76,14 +76,17 @@ test('左右は端から 20 の内側', () => {
   assert.equal(L.clampX(123), 123);
 });
 
-test('塔の今の高さ（落ちている途中のものは数えない）', () => {
-  const now = 5000;
-  assert.equal(L.standHeight([], now), 0);
+test('塔の今の高さ（着地したものだけ）、画面は揺れでは下がらない', () => {
+  assert.equal(L.standHeight([]), 0);
   assert.equal(L.standHeight([
-    { droppedAt: 1000, top: -44 },
-    { droppedAt: 4800, top: -300 },   // 落としたばかり
-  ], now), 44);
-  assert.equal(L.standHeight([{ droppedAt: 0, top: 30 }], now), 0, '土台より下は 0');
+    { landed: true, top: -44 },
+    { landed: false, top: -300 },   // まだ空中
+  ]), 44);
+  assert.equal(L.standHeight([{ landed: true, top: 30 }]), 0, '土台より下は 0');
+  assert.equal(L.followHeight(100, 130, false), 130, '上がるのはすぐ');
+  assert.equal(L.followHeight(100, 70, false), 100, '動いている間は下がらない');
+  assert.equal(L.followHeight(100, 70, true), 100, '少し低くなっただけでは下がらない');
+  assert.equal(L.followHeight(100, 100 - L.CAM_DROP - 1, true), 100 - L.CAM_DROP - 1, '止まって大きく崩れたら下がる');
   assert.equal(L.toU(44), 2);
   assert.equal(L.heightText(34.2), '3.4 m');
   assert.equal(L.heightText(0), '0.0 m');

@@ -1,7 +1,7 @@
 // SWAYSTONE 本体。決まりごと（数値・形・記録）は logic.js、ここは画面・操作・物理のつなぎ。
 import {
   WORLD_W, BASE, BASE_FROM_BOTTOM, NEXT_DELAY, OVER_DELAY, KEY_MOVE, ROT_STEP, ROT_SPEED, ROT_HOLD,
-  MATERIALS, PHYSICS, makeBody, pickBlock, clampX, standHeight, updateRecord, isOver, spawnYFor, cameraLift,
+  MATERIALS, PHYSICS, makeBody, pickBlock, clampX, standHeight, followHeight, allStill, updateRecord, isOver, spawnYFor, cameraLift,
   viewScale, toU, heightText, shareText, readBest, writeBest, mergeBest,
 } from './logic.js';
 import { unlock, isOn, setOn, sfx } from './sound.js';
@@ -196,6 +196,7 @@ function start() {
   game = {
     held: null, blocks: [], count: 0, nextAt: 0, overAt: 0, over: false,
     stand: 0,                                  // 塔の今の上端の高さ
+    cam: 0,                                    // 画面が追いかける高さ
     rec: { stillSince: null, height: 0 },      // 高さの記録（全部が止まったときだけ更新）
     height: 0,                                 // 表示と保存に使う高さ（u）
     lift: 0, cardBottom: 0,
@@ -267,14 +268,15 @@ function step() {
   } else if (!game.over && t >= game.nextAt) spawn();
 
   const snap = game.blocks.map(({ body, droppedAt }) => ({
-    droppedAt, speed: body.speed, spin: Math.abs(body.angularVelocity), top: body.bounds.min.y, y: body.position.y,
+    droppedAt, landed: !!body.look.landed, speed: body.speed, spin: Math.abs(body.angularVelocity), top: body.bounds.min.y, y: body.position.y,
   }));
-  game.stand = standHeight(snap, t);
+  game.stand = standHeight(snap);
+  game.cam = followHeight(game.cam, game.stand, allStill(snap, t));
   game.rec = updateRecord(game.rec, snap, t);
   if (toU(game.rec.height) !== game.height) { game.height = toU(game.rec.height); hud(); }
 
-  // 画面は今の高さに合わせて上下する。結果のカードが塔に重なるときは、塔の上端がカードの下に来るまで上げる
-  let lift = cameraLift(view.h, game.stand);
+  // 画面は追いかける高さに合わせて上下する。結果のカードが塔に重なるときは、塔の上端がカードの下に来るまで上げる
+  let lift = cameraLift(view.h, game.cam);
   if (game.cardBottom) lift = Math.max(lift, BASE_FROM_BOTTOM - view.h + game.stand + game.cardBottom);
   game.lift += (lift - game.lift) * 0.06;
   // 塔が伸びて近づいたら、持っているブロックも上げる（下げはしない）

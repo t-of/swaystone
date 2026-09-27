@@ -90,11 +90,19 @@ export const clampX = (x) => Math.min(WORLD_W - EDGE, Math.max(EDGE, x));
 // blocks: [{ droppedAt, speed, spin, top, y }]
 //   top = 体のいちばん上の y、y = 中心の y、speed = 速さ、spin = 回る速さ（土台の上面が y = 0、上が −）
 
-// 塔の今の上端の高さ（落として NEXT_DELAY たったものだけ。落ちている途中のものは数えない）
-export function standHeight(blocks, now) {
+// 塔の今の上端の高さ（何かに着地したものだけ。落ちている途中のものは数えない）
+export function standHeight(blocks) {
   let h = 0;
-  for (const b of blocks) if (now - b.droppedAt >= NEXT_DELAY) h = Math.max(h, -b.top);
+  for (const b of blocks) if (b.landed) h = Math.max(h, -b.top);
   return h;
+}
+
+// 画面が追いかける高さ。上がるのはすぐ、下がるのは全部が止まって CAM_DROP 以上低くなったときだけ
+// （揺れたり、横に落ちていくブロックのたびに画面が上下しないように）
+export const CAM_DROP = 60;
+export function followHeight(cam, stand, still) {
+  if (stand > cam || (still && cam - stand > CAM_DROP)) return stand;
+  return cam;
 }
 
 // 全部が止まっているか
